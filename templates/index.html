@@ -974,16 +974,47 @@
             
             container.innerHTML = taskList.map(task => {
                 const statusText = getStatusText(task.status);
+                
+                // 如果任务完成，显示生成的文件列表
+                let filesHtml = '';
+                if (task.status === 'completed' && task.files) {
+                    const files = task.files;
+                    filesHtml = `
+                        <div class="task-files" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e1e8ed;">
+                            <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px;">
+                                📁 生成的文件：
+                            </div>
+                            <div style="font-size: 12px; color: #666; line-height: 1.8;">
+                                ${files.video_dir ? `<div>📂 输出目录: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">${escapeHtml(files.video_dir)}</code></div>` : ''}
+                                ${files.subtitle ? `<div>📝 字幕文件: ${getFileName(files.subtitle)}</div>` : ''}
+                                ${files.cover ? `<div>🖼️ 封面图片: ${getFileName(files.cover)}</div>` : ''}
+                                ${files.summary_json ? `<div>📄 要点总结: ${getFileName(files.summary_json)}</div>` : ''}
+                                ${files.content_md ? `<div>📚 完整文档: ${getFileName(files.content_md)}</div>` : ''}
+                                ${files.exercises ? `<div>📝 练习题: ${getFileName(files.exercises)}</div>` : ''}
+                                ${files.questions ? `<div>❓预设问题: ${getFileName(files.questions)}</div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 return `
                     <div class="task-item ${task.status}">
                         <div class="task-url">${escapeHtml(task.url)}</div>
-                        <div>
+                        ${task.video_title ? `<div style="font-size: 13px; color: #666; margin-top: 4px;">📹 ${escapeHtml(task.video_title)}</div>` : ''}
+                        <div style="margin-top: 8px;">
                             <span class="task-status ${task.status}">${statusText}</span>
                         </div>
                         <div class="task-message">${escapeHtml(task.message)}</div>
+                        ${filesHtml}
                     </div>
                 `;
             }).join('');
+        }
+        
+        // 从完整路径中提取文件名
+        function getFileName(path) {
+            if (!path) return '';
+            return path.split(/[/\\]/).pop();
         }
 
         // 获取状态文本

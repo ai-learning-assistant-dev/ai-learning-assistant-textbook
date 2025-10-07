@@ -9,6 +9,8 @@ import requests
 import json
 import re
 import os
+import time
+import random
 from typing import Optional, Dict, List
 import argparse
 from pathlib import Path
@@ -18,7 +20,8 @@ class BilibiliSubtitleDownloader:
     """Bilibili字幕下载器"""
     
     def __init__(self, sessdata: Optional[str] = None, bili_jct: Optional[str] = None, 
-                 buvid3: Optional[str] = None, debug: bool = False):
+                 buvid3: Optional[str] = None, debug: bool = False,
+                 request_delay: float = 2.0, max_retries: int = 3):
         """
         初始化下载器
         
@@ -27,11 +30,28 @@ class BilibiliSubtitleDownloader:
             bili_jct: Bilibili登录凭证 bili_jct
             buvid3: Bilibili登录凭证 buvid3
             debug: 是否启用调试模式
+            request_delay: 请求间隔时间（秒），防止触发反爬虫
+            max_retries: 最大重试次数
         """
+        # 使用更真实的浏览器User-Agent
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        ]
+        
         self.headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': random.choice(user_agents),
             'Referer': 'https://www.bilibili.com',
-            'Origin': 'https://www.bilibili.com'
+            'Origin': 'https://www.bilibili.com',
+            'Accept': 'application/json, text/plain, */*',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Sec-Fetch-Dest': 'empty',
+            'Sec-Fetch-Mode': 'cors',
+            'Sec-Fetch-Site': 'same-site',
         }
         
         # 构建cookies
@@ -44,6 +64,24 @@ class BilibiliSubtitleDownloader:
             self.cookies['buvid3'] = buvid3
         
         self.debug = debug
+        self.request_delay = request_delay
+        self.max_retries = max_retries
+        self.last_request_time = 0
+        
+        if self.debug:
+            print(f"[DEBUG] 请求延迟: {request_delay}秒")
+            print(f"[DEBUG] 最大重试次数: {max_retries}")
+    
+    def _wait_if_needed(self):
+        """在请求前等待，避免请求过快"""
+        if self.last_request_time > 0:
+            elapsed = time.time() - self.last_request_time
+            if elapsed < self.request_delay:
+                wait_time = self.request_delay - elapsed + random.uniform(0, 0.5)  # 添加随机延迟
+                if self.debug:
+                    print(f"[DEBUG] 等待 {wait_time:.2f} 秒...")
+                time.sleep(wait_time)
+        self.last_request_time = time.time()
     
     def extract_bvid(self, url: str) -> Optional[str]:
         """
@@ -65,7 +103,7 @@ class BilibiliSubtitleDownloader:
     
     def get_video_info(self, bvid: str) -> Optional[Dict]:
         """
-        获取视频信息，包括cid
+        获取视频信息，包括cid（带重试机制）
         
         Args:
             bvid: 视频的BV号
@@ -75,26 +113,44 @@ class BilibiliSubtitleDownloader:
         """
         api_url = f'https://api.bilibili.com/x/web-interface/view?bvid={bvid}'
         
-        try:
-            response = requests.get(api_url, headers=self.headers, cookies=self.cookies)
-            response.raise_for_status()
-            data = response.json()
-            
-            if self.debug:
-                print(f"[DEBUG] 视频信息API响应: {json.dumps(data, ensure_ascii=False, indent=2)}")
-            
-            if data.get('code') == 0:
-                return data.get('data')
-            else:
-                print(f"获取视频信息失败: {data.get('message')}")
+        for attempt in range(self.max_retries):
+            try:
+                self._wait_if_needed()
+                
+                response = requests.get(api_url, headers=self.headers, cookies=self.cookies, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                if self.debug:
+                    print(f"[DEBUG] 视频信息API响应码: {data.get('code')}")
+                
+                if data.get('code') == 0:
+                    return data.get('data')
+                else:
+                    print(f"获取视频信息失败: {data.get('message')}")
+                    if attempt < self.max_retries - 1:
+                        wait_time = 2 ** attempt  # 指数退避
+                        print(f"等待 {wait_time} 秒后重试...")
+                        time.sleep(wait_time)
+                    continue
+                    
+            except requests.exceptions.Timeout:
+                print(f"请求超时 (尝试 {attempt + 1}/{self.max_retries})")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                continue
+            except Exception as e:
+                print(f"请求视频信息时出错: {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
                 return None
-        except Exception as e:
-            print(f"请求视频信息时出错: {e}")
-            return None
+        
+        return None
     
     def get_subtitle_info(self, bvid: str, cid: int) -> Optional[List[Dict]]:
         """
-        获取字幕信息（包括官方CC字幕和AI字幕）
+        获取字幕信息（包括官方CC字幕和AI字幕，带重试机制）
         
         Args:
             bvid: 视频的BV号
@@ -110,65 +166,27 @@ class BilibiliSubtitleDownloader:
             print(f"[DEBUG] 请求字幕API: {api_url}")
             print(f"[DEBUG] Cookies: {self.cookies}")
         
-        try:
-            response = requests.get(api_url, headers=self.headers, cookies=self.cookies)
-            response.raise_for_status()
-            data = response.json()
-            
-            if self.debug:
-                print(f"[DEBUG] 字幕API响应码: {data.get('code')}")
-                # print(f"[DEBUG] 完整响应: {json.dumps(data, ensure_ascii=False, indent=2)}")
-            
-            if data.get('code') == 0:
-                subtitle_data = data.get('data', {}).get('subtitle', {})
-                subtitles = subtitle_data.get('subtitles', [])
+        for attempt in range(self.max_retries):
+            try:
+                self._wait_if_needed()
                 
-                # 检查是否有AI字幕
-                ai_subtitle = subtitle_data.get('ai_subtitle')
-                if ai_subtitle and self.debug:
-                    print(f"[DEBUG] 发现AI字幕信息: {ai_subtitle}")
-                
-                # 如果有AI字幕URL，添加到字幕列表
-                if ai_subtitle and isinstance(ai_subtitle, dict):
-                    ai_subtitle_url = ai_subtitle.get('subtitle_url')
-                    if ai_subtitle_url:
-                        ai_sub_info = {
-                            'lan': 'ai-zh',
-                            'lan_doc': 'AI字幕(中文)',
-                            'subtitle_url': ai_subtitle_url,
-                            'is_ai': True
-                        }
-                        subtitles.append(ai_sub_info)
-                        if self.debug:
-                            print(f"[DEBUG] 添加AI字幕到列表: {ai_sub_info}")
-                
-                if self.debug:
-                    print(f"[DEBUG] 找到字幕总数: {len(subtitles)}")
-                    for sub in subtitles:
-                        print(f"[DEBUG] 字幕: {sub.get('lan_doc', sub.get('lan', 'Unknown'))} - {sub.get('subtitle_url', 'No URL')}")
-                
-                return subtitles if subtitles else None
-            else:
-                print(f"获取字幕信息失败 (wbi API): {data.get('message')}")
-                
-                # 尝试旧版API
-                if self.debug:
-                    print("[DEBUG] 尝试使用旧版API...")
-                
-                api_url_old = f'https://api.bilibili.com/x/player/v2?bvid={bvid}&cid={cid}'
-                response = requests.get(api_url_old, headers=self.headers, cookies=self.cookies)
+                response = requests.get(api_url, headers=self.headers, cookies=self.cookies, timeout=10)
                 response.raise_for_status()
                 data = response.json()
                 
                 if self.debug:
-                    print(f"[DEBUG] 旧版API响应码: {data.get('code')}")
+                    print(f"[DEBUG] 字幕API响应码: {data.get('code')}")
                 
                 if data.get('code') == 0:
                     subtitle_data = data.get('data', {}).get('subtitle', {})
                     subtitles = subtitle_data.get('subtitles', [])
                     
-                    # 同样检查AI字幕
+                    # 检查是否有AI字幕
                     ai_subtitle = subtitle_data.get('ai_subtitle')
+                    if ai_subtitle and self.debug:
+                        print(f"[DEBUG] 发现AI字幕信息: {ai_subtitle}")
+                    
+                    # 如果有AI字幕URL，添加到字幕列表
                     if ai_subtitle and isinstance(ai_subtitle, dict):
                         ai_subtitle_url = ai_subtitle.get('subtitle_url')
                         if ai_subtitle_url:
@@ -179,21 +197,76 @@ class BilibiliSubtitleDownloader:
                                 'is_ai': True
                             }
                             subtitles.append(ai_sub_info)
+                            if self.debug:
+                                print(f"[DEBUG] 添加AI字幕到列表: {ai_sub_info}")
+                    
+                    if self.debug:
+                        print(f"[DEBUG] 找到字幕总数: {len(subtitles)}")
+                        for sub in subtitles:
+                            print(f"[DEBUG] 字幕: {sub.get('lan_doc', sub.get('lan', 'Unknown'))} - {sub.get('subtitle_url', 'No URL')}")
                     
                     return subtitles if subtitles else None
                 else:
-                    print(f"获取字幕信息失败 (旧版API): {data.get('message')}")
-                    return None
-        except Exception as e:
-            print(f"请求字幕信息时出错: {e}")
-            if self.debug:
-                import traceback
-                traceback.print_exc()
-            return None
+                    print(f"获取字幕信息失败 (wbi API): {data.get('message')}")
+                    
+                    # 尝试旧版API
+                    if self.debug:
+                        print("[DEBUG] 尝试使用旧版API...")
+                    
+                    self._wait_if_needed()
+                    api_url_old = f'https://api.bilibili.com/x/player/v2?bvid={bvid}&cid={cid}'
+                    response = requests.get(api_url_old, headers=self.headers, cookies=self.cookies, timeout=10)
+                    response.raise_for_status()
+                    data = response.json()
+                    
+                    if self.debug:
+                        print(f"[DEBUG] 旧版API响应码: {data.get('code')}")
+                    
+                    if data.get('code') == 0:
+                        subtitle_data = data.get('data', {}).get('subtitle', {})
+                        subtitles = subtitle_data.get('subtitles', [])
+                        
+                        # 同样检查AI字幕
+                        ai_subtitle = subtitle_data.get('ai_subtitle')
+                        if ai_subtitle and isinstance(ai_subtitle, dict):
+                            ai_subtitle_url = ai_subtitle.get('subtitle_url')
+                            if ai_subtitle_url:
+                                ai_sub_info = {
+                                    'lan': 'ai-zh',
+                                    'lan_doc': 'AI字幕(中文)',
+                                    'subtitle_url': ai_subtitle_url,
+                                    'is_ai': True
+                                }
+                                subtitles.append(ai_sub_info)
+                        
+                        return subtitles if subtitles else None
+                    else:
+                        if attempt < self.max_retries - 1:
+                            wait_time = 2 ** attempt
+                            print(f"获取字幕信息失败，等待 {wait_time} 秒后重试...")
+                            time.sleep(wait_time)
+                        continue
+                        
+            except requests.exceptions.Timeout:
+                print(f"请求超时 (尝试 {attempt + 1}/{self.max_retries})")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                continue
+            except Exception as e:
+                print(f"请求字幕信息时出错: {e}")
+                if self.debug:
+                    import traceback
+                    traceback.print_exc()
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return None
+        
+        return None
     
     def download_subtitle(self, subtitle_url: str, is_ai: bool = False) -> Optional[List[Dict]]:
         """
-        下载字幕内容
+        下载字幕内容（带重试机制）
         
         Args:
             subtitle_url: 字幕文件的URL
@@ -210,27 +283,41 @@ class BilibiliSubtitleDownloader:
             print(f"[DEBUG] 下载字幕URL: {subtitle_url}")
             print(f"[DEBUG] 是否AI字幕: {is_ai}")
         
-        try:
-            # AI字幕需要带cookies
-            if is_ai or 'aisubtitle' in subtitle_url:
-                response = requests.get(subtitle_url, headers=self.headers, cookies=self.cookies)
-            else:
-                response = requests.get(subtitle_url, headers=self.headers)
-            
-            response.raise_for_status()
-            subtitle_data = response.json()
-            
-            if self.debug:
-                print(f"[DEBUG] 字幕数据类型: {subtitle_data.get('type', 'standard')}")
-                print(f"[DEBUG] 字幕条数: {len(subtitle_data.get('body', []))}")
-            
-            return subtitle_data.get('body', [])
-        except Exception as e:
-            print(f"下载字幕时出错: {e}")
-            if self.debug:
-                import traceback
-                traceback.print_exc()
-            return None
+        for attempt in range(self.max_retries):
+            try:
+                self._wait_if_needed()
+                
+                # AI字幕需要带cookies
+                if is_ai or 'aisubtitle' in subtitle_url:
+                    response = requests.get(subtitle_url, headers=self.headers, cookies=self.cookies, timeout=15)
+                else:
+                    response = requests.get(subtitle_url, headers=self.headers, timeout=15)
+                
+                response.raise_for_status()
+                subtitle_data = response.json()
+                
+                if self.debug:
+                    print(f"[DEBUG] 字幕数据类型: {subtitle_data.get('type', 'standard')}")
+                    print(f"[DEBUG] 字幕条数: {len(subtitle_data.get('body', []))}")
+                
+                return subtitle_data.get('body', [])
+                
+            except requests.exceptions.Timeout:
+                print(f"下载字幕超时 (尝试 {attempt + 1}/{self.max_retries})")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                continue
+            except Exception as e:
+                print(f"下载字幕时出错: {e}")
+                if self.debug:
+                    import traceback
+                    traceback.print_exc()
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+                    continue
+                return None
+        
+        return None
     
     def save_subtitle_as_srt(self, subtitle_content: List[Dict], output_path: str):
         """
@@ -282,6 +369,45 @@ class BilibiliSubtitleDownloader:
         
         print(f"字幕已保存到: {output_path}")
     
+    def download_cover(self, cover_url: str, output_path: str) -> bool:
+        """
+        下载视频封面图片
+        
+        Args:
+            cover_url: 封面图片URL
+            output_path: 输出文件路径
+            
+        Returns:
+            是否下载成功
+        """
+        try:
+            # 确保URL是完整的
+            if cover_url.startswith('//'):
+                cover_url = 'https:' + cover_url
+            elif not cover_url.startswith('http'):
+                cover_url = 'https://' + cover_url
+            
+            if self.debug:
+                print(f"[DEBUG] 下载封面URL: {cover_url}")
+            
+            # 下载图片
+            response = requests.get(cover_url, headers=self.headers, timeout=30)
+            response.raise_for_status()
+            
+            # 保存图片
+            with open(output_path, 'wb') as f:
+                f.write(response.content)
+            
+            print(f"封面已保存到: {output_path}")
+            return True
+            
+        except Exception as e:
+            print(f"下载封面时出错: {e}")
+            if self.debug:
+                import traceback
+                traceback.print_exc()
+            return False
+    
     def _format_timestamp(self, seconds: float) -> str:
         """
         将秒数转换为SRT时间格式 (HH:MM:SS,mmm)
@@ -300,39 +426,57 @@ class BilibiliSubtitleDownloader:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     def download(self, video_url: str, output_dir: str = 'subtitles', 
-                 format_type: str = 'srt', language: Optional[str] = None) -> List[str]:
+                 format_type: str = 'srt', language: Optional[str] = None,
+                 download_cover: bool = True) -> Dict[str, any]:
         """
-        下载视频字幕的主函数
+        下载视频字幕和封面的主函数
         
         Args:
             video_url: Bilibili视频URL
             output_dir: 输出目录
             format_type: 输出格式 (srt/json/txt)
             language: 指定语言，None则下载所有语言
+            download_cover: 是否下载封面图片（默认True）
             
         Returns:
-            下载的字幕文件路径列表，如果没有下载任何字幕则返回空列表
+            包含下载结果的字典：
+            {
+                'subtitles': [字幕文件路径列表],
+                'cover': 封面文件路径或None,
+                'title': 视频标题,
+                'bvid': 视频BV号
+            }
         """
         print(f"开始处理视频: {video_url}")
         
-        downloaded_files = []
+        result = {
+            'subtitles': [],
+            'cover': None,
+            'title': '',
+            'bvid': '',
+            'video_dir': ''
+        }
         
         # 提取BV号
         bvid = self.extract_bvid(video_url)
         if not bvid:
             print("错误: 无法从URL中提取BV号")
-            return downloaded_files
+            return result
         
+        result['bvid'] = bvid
         print(f"提取到BV号: {bvid}")
         
         # 获取视频信息
         video_info = self.get_video_info(bvid)
         if not video_info:
             print("错误: 无法获取视频信息")
-            return downloaded_files
+            return result
         
-        # 获取视频标题和cid
+        # 获取视频标题和封面
         title = video_info.get('title', bvid)
+        result['title'] = title
+        cover_url = video_info.get('pic', '')
+        
         # 清理文件名中的非法字符
         title = re.sub(r'[\\/:*?"<>|]', '_', title)
         
@@ -340,12 +484,43 @@ class BilibiliSubtitleDownloader:
         pages = video_info.get('pages', [])
         if not pages:
             print("错误: 未找到视频分P信息")
-            return downloaded_files
+            return result
         
-        # 创建输出目录
-        os.makedirs(output_dir, exist_ok=True)
+        # 先检查是否有可用字幕（不创建文件夹）
+        has_subtitle = False
+        for page in pages:
+            cid = page['cid']
+            subtitles = self.get_subtitle_info(bvid, cid)
+            if subtitles:
+                has_subtitle = True
+                break
         
-        # 遍历每个分P
+        if not has_subtitle:
+            print("错误: 此视频没有字幕")
+            return result
+        
+        # 确认有字幕后，才创建输出目录和下载封面
+        video_dir = os.path.join(output_dir, title)
+        os.makedirs(video_dir, exist_ok=True)
+        result['video_dir'] = video_dir
+        print(f"输出目录: {video_dir}")
+        
+        # 下载封面图片
+        if download_cover and cover_url:
+            print(f"\n下载视频封面...")
+            # 从URL中提取文件扩展名，如果没有则使用.jpg
+            import urllib.parse
+            parsed_url = urllib.parse.urlparse(cover_url)
+            cover_ext = os.path.splitext(parsed_url.path)[1] or '.jpg'
+            
+            cover_filename = f"cover{cover_ext}"
+            cover_path = os.path.join(video_dir, cover_filename)
+            
+            if self.download_cover(cover_url, cover_path):
+                result['cover'] = cover_path
+            print()
+        
+        # 遍历每个分P下载字幕
         for page in pages:
             cid = page['cid']
             page_title = page.get('part', '第1P')
@@ -388,11 +563,11 @@ class BilibiliSubtitleDownloader:
                 
                 # 构建输出文件名
                 if len(pages) > 1:
-                    filename = f"{title}_{page_title}_{lan}.{format_type}"
+                    filename = f"{page_title}_{lan}.{format_type}"
                 else:
-                    filename = f"{title}_{lan}.{format_type}"
+                    filename = f"subtitle_{lan}.{format_type}"
                 
-                output_path = os.path.join(output_dir, filename)
+                output_path = os.path.join(video_dir, filename)
                 
                 # 根据格式保存字幕
                 if format_type == 'srt':
@@ -406,9 +581,9 @@ class BilibiliSubtitleDownloader:
                     continue
                 
                 # 记录成功下载的文件
-                downloaded_files.append(output_path)
+                result['subtitles'].append(output_path)
         
-        return downloaded_files
+        return result
 
 
 def load_cookies_from_file(config_file: str = 'cookies.txt') -> Dict[str, Optional[str]]:

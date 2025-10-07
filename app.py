@@ -115,27 +115,33 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
             debug=False
         )
         
-        # 下载字幕
-        downloader.download(
+        # 下载字幕和封面
+        download_result = downloader.download(
             video_url=url,
             output_dir=output_dir,
-            format_type='srt'
+            format_type='srt',
+            download_cover=True
         )
         
-        # 查找下载的字幕文件
-        output_path = Path(output_dir)
-        srt_files = sorted(output_path.glob('*.srt'), key=os.path.getmtime, reverse=True)
+        # 获取下载结果
+        downloaded_files = download_result.get('subtitles', [])
+        cover_path = download_result.get('cover')
+        video_title = download_result.get('title', '')
+        video_dir = download_result.get('video_dir', output_dir)
         
-        if not srt_files:
-            raise Exception('未找到下载的字幕文件')
+        # 检查是否成功下载了字幕
+        if not downloaded_files:
+            raise Exception('此视频没有字幕，无法进行总结')
         
-        subtitle_file = str(srt_files[0])
+        subtitle_file = downloaded_files[0]  # 使用第一个字幕文件
         
-        # 更新状态：总结中
+        # 更新状态：AI处理中
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.SUMMARIZING
-            tasks[task_id]['message'] = f'正在生成总结: {Path(subtitle_file).name}'
+            tasks[task_id]['message'] = f'正在生成AI内容 (1/4): 要点总结...'
             tasks[task_id]['subtitle_file'] = subtitle_file
+            tasks[task_id]['video_dir'] = video_dir
+            tasks[task_id]['video_title'] = video_title
         
         # 加载LLM配置
         llm_config_file = 'config/llm_models.json'
@@ -153,30 +159,80 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
         subtitles = SRTParser.parse_srt_file(subtitle_file)
         subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
         
-        # 生成总结
+        # 创建总结器
         summarizer = SubtitleSummarizer(llm_client)
+        
+        # ========== 1. 生成要点总结 ==========
         summary = summarizer.summarize(subtitle_text, stream=False)
         
-        # 保存总结
-        summary_txt_file = Path(subtitle_file).with_suffix('.summary.txt')
-        summary_json_file = Path(subtitle_file).with_suffix('.summary.json')
-        
-        # 格式化输出
-        formatted_output = format_summary(summary)
-        
-        with open(summary_txt_file, 'w', encoding='utf-8') as f:
-            f.write(formatted_output)
+        # 保存总结（只保存JSON格式）
+        summary_json_file = os.path.join(video_dir, 'summary.json')
         
         with open(summary_json_file, 'w', encoding='utf-8') as f:
             json.dump(summary, f, ensure_ascii=False, indent=2)
         
+        # ========== 2. 生成完整内容文档 ==========
+        with tasks_lock:
+            tasks[task_id]['message'] = f'正在生成AI内容 (2/4): 完整文档...'
+        
+        # 预处理字幕文本
+        plain_text = SRTParser.extract_plain_text(subtitle_file)
+        
+        full_content = summarizer.generate_full_content(
+            plain_text,
+            video_title=video_title,
+            stream=False
+        )
+        
+        # 保存完整内容为Markdown文件
+        full_content_file = os.path.join(video_dir, 'content.md')
+        with open(full_content_file, 'w', encoding='utf-8') as f:
+            f.write(full_content)
+        
+        # ========== 3. 生成练习题 ==========
+        with tasks_lock:
+            tasks[task_id]['message'] = f'正在生成AI内容 (3/4): 练习题...'
+        
+        exercises = summarizer.generate_exercises(
+            plain_text,
+            video_title=video_title,
+            stream=False
+        )
+        
+        # 保存练习题为JSON文件
+        exercises_file = os.path.join(video_dir, 'exercises.json')
+        with open(exercises_file, 'w', encoding='utf-8') as f:
+            json.dump(exercises, f, ensure_ascii=False, indent=2)
+        
+        # ========== 4. 生成预设问题 ==========
+        with tasks_lock:
+            tasks[task_id]['message'] = f'正在生成AI内容 (4/4): 预设问题...'
+        
+        preset_questions = summarizer.generate_preset_questions(
+            plain_text,
+            video_title=video_title,
+            stream=False
+        )
+        
+        # 保存预设问题为JSON文件
+        questions_file = os.path.join(video_dir, 'questions.json')
+        with open(questions_file, 'w', encoding='utf-8') as f:
+            json.dump(preset_questions, f, ensure_ascii=False, indent=2)
+        
         # 更新状态：完成
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.COMPLETED
-            tasks[task_id]['message'] = '处理完成'
+            tasks[task_id]['message'] = '全部完成！已生成字幕、封面、总结、完整文档、练习题和预设问题'
             tasks[task_id]['summary'] = summary
-            tasks[task_id]['summary_txt_file'] = str(summary_txt_file)
-            tasks[task_id]['summary_json_file'] = str(summary_json_file)
+            tasks[task_id]['files'] = {
+                'video_dir': video_dir,
+                'subtitle': subtitle_file,
+                'cover': cover_path,
+                'summary_json': summary_json_file,
+                'content_md': full_content_file,
+                'exercises': exercises_file,
+                'questions': questions_file
+            }
             tasks[task_id]['completed_at'] = datetime.now().isoformat()
         
     except Exception as e:
@@ -187,42 +243,6 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
             tasks[task_id]['error'] = str(e)
 
 
-def format_summary(summary):
-    """格式化总结输出"""
-    output = []
-    output.append("=" * 80)
-    output.append("视频内容总结")
-    output.append("=" * 80)
-    output.append("")
-    
-    if 'overview' in summary and summary['overview']:
-        output.append("📹 视频概述：")
-        output.append(f"   {summary['overview']}")
-        output.append("")
-    
-    if 'key_points' in summary and summary['key_points']:
-        key_points = summary['key_points']
-        output.append(f"🎯 关键要点（共 {len(key_points)} 个）：")
-        output.append("")
-        
-        for i, point in enumerate(key_points, 1):
-            time = point.get('time', '')
-            title = point.get('title', '')
-            description = point.get('description', '')
-            
-            output.append(f"{i}. [{time}] {title}")
-            output.append("")
-            
-            if description:
-                # 格式化描述，每行缩进
-                desc_lines = description.split('\n')
-                for line in desc_lines:
-                    if line.strip():
-                        output.append(f"   {line}")
-                output.append("")
-    
-    output.append("=" * 80)
-    return '\n'.join(output)
 
 
 # ==================== Web路由 ====================
