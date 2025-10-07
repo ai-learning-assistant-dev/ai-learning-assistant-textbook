@@ -98,24 +98,32 @@ def main():
         if not sessdata:
             print("警告：未在配置文件中找到SESSDATA，可能无法下载AI字幕")
         
-        # 创建下载器
+        # 创建下载器（启用反爬虫保护）
         downloader = BilibiliSubtitleDownloader(
             sessdata=sessdata,
             bili_jct=config_cookies.get('bili_jct'),
             buvid3=config_cookies.get('buvid3'),
-            debug=args.debug
+            debug=args.debug,
+            request_delay=2.0,  # 请求间隔2秒
+            max_retries=3       # 最多重试3次
         )
         
-        # 下载字幕
+        # 下载字幕和封面
         print(f"视频URL: {args.url}")
         print(f"输出目录: {args.output}")
         print()
         
-        downloaded_files = downloader.download(
+        download_result = downloader.download(
             video_url=args.url,
             output_dir=args.output,
-            format_type='srt'
+            format_type='srt',
+            download_cover=True
         )
+        
+        downloaded_files = download_result.get('subtitles', [])
+        cover_path = download_result.get('cover')
+        video_title = download_result.get('title', '')
+        video_dir = download_result.get('video_dir', args.output)
         
         print()
         
@@ -125,6 +133,9 @@ def main():
             sys.exit(0)
         
         print("✅ 字幕下载完成！")
+        if cover_path:
+            print(f"✅ 封面图片已保存: {cover_path}")
+        print(f"✅ 所有文件保存在: {video_dir}")
         print()
         
     except Exception as e:
@@ -188,29 +199,120 @@ def main():
                 # 格式化字幕文本
                 subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
                 
-                # 生成总结
+                # 生成要点总结
                 summarizer = SubtitleSummarizer(llm_client)
+                print("📝 正在生成要点总结...")
                 summary = summarizer.summarize(subtitle_text, stream=args.stream)
                 
-                # 格式化并输出
-                formatted_output = format_output(summary)
-                print()
-                print(formatted_output)
-                
-                # 保存总结到文件
-                summary_txt_file = Path(subtitle_file).with_suffix('.summary.txt')
-                summary_json_file = Path(subtitle_file).with_suffix('.summary.json')
-                
-                with open(summary_txt_file, 'w', encoding='utf-8') as f:
-                    f.write(formatted_output)
+                # 保存总结到文件（只保存JSON格式）
+                summary_json_file = os.path.join(video_dir, 'summary.json')
                 
                 with open(summary_json_file, 'w', encoding='utf-8') as f:
                     json.dump(summary, f, ensure_ascii=False, indent=2)
                 
                 print()
-                print("✅ 总结已保存：")
-                print(f"   文本格式: {summary_txt_file}")
+                print("✅ 要点总结已保存：")
                 print(f"   JSON格式: {summary_json_file}")
+                
+                # 显示要点总结（终端输出）
+                print()
+                print("=" * 80)
+                print("📋 要点总结预览：")
+                print("=" * 80)
+                key_points = summary.get('key_points', [])
+                print(f"\n🎯 关键要点（共 {len(key_points)} 个）：\n")
+                for i, point in enumerate(key_points, 1):
+                    time = point.get('time', '')
+                    title = point.get('title', '')
+                    print(f"{i}. [{time}] {title}")
+                print("=" * 80)
+                
+                # 生成完整内容文档
+                print()
+                print("=" * 80)
+                print("📚 正在生成完整内容文档...")
+                print("-" * 80)
+                
+                # 使用预处理的文本（去除时间标签，智能分段）
+                print("正在预处理字幕文本...")
+                plain_text = SRTParser.extract_plain_text(subtitle_file)
+                
+                if args.debug:
+                    print(f"[DEBUG] 预处理后文本长度: {len(plain_text)} 字符")
+                    print(f"[DEBUG] 预处理示例:\n{plain_text[:500]}...\n")
+                
+                full_content = summarizer.generate_full_content(
+                    plain_text,  # 使用预处理后的文本
+                    video_title=video_title,
+                    stream=args.stream
+                )
+                
+                # 保存完整内容为Markdown文件
+                full_content_file = os.path.join(video_dir, 'content.md')
+                with open(full_content_file, 'w', encoding='utf-8') as f:
+                    f.write(full_content)
+                
+                print()
+                print("✅ 完整内容已保存：")
+                print(f"   Markdown格式: {full_content_file}")
+                
+                # 生成练习题
+                print()
+                print("=" * 80)
+                print("📝 正在生成练习题...")
+                print("-" * 80)
+                
+                exercises = summarizer.generate_exercises(
+                    plain_text,
+                    video_title=video_title,
+                    stream=args.stream
+                )
+                
+                # 保存练习题为JSON文件
+                exercises_file = os.path.join(video_dir, 'exercises.json')
+                with open(exercises_file, 'w', encoding='utf-8') as f:
+                    json.dump(exercises, f, ensure_ascii=False, indent=2)
+                
+                print()
+                print("✅ 练习题已保存：")
+                print(f"   JSON格式: {exercises_file}")
+                
+                # 显示题目数量统计
+                mc_count = len(exercises.get('multiple_choice', []))
+                sa_count = len(exercises.get('short_answer', []))
+                print(f"   选择题: {mc_count} 道")
+                print(f"   简答题: {sa_count} 道")
+                
+                # 生成预设问题
+                print()
+                print("=" * 80)
+                print("❓ 正在生成预设问题...")
+                print("-" * 80)
+                
+                preset_questions = summarizer.generate_preset_questions(
+                    plain_text,
+                    video_title=video_title,
+                    stream=args.stream
+                )
+                
+                # 保存预设问题为JSON文件
+                questions_file = os.path.join(video_dir, 'questions.json')
+                with open(questions_file, 'w', encoding='utf-8') as f:
+                    json.dump(preset_questions, f, ensure_ascii=False, indent=2)
+                
+                print()
+                print("✅ 预设问题已保存：")
+                print(f"   JSON格式: {questions_file}")
+                
+                # 显示问题数量
+                q_count = len(preset_questions.get('questions', []))
+                print(f"   问题数量: {q_count} 个")
+                
+                # 显示问题预览
+                if q_count > 0:
+                    print("\n   问题预览:")
+                    for q in preset_questions.get('questions', []):
+                        print(f"   {q.get('id')}. {q.get('question')}")
                 
                 success_count += 1
                 

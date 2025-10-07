@@ -42,9 +42,8 @@ env/
 cookies.txt
 config/llm_models.json
 config/app_config.json
-subtitles/*.srt
-subtitles/*.json
-subtitles/*.txt
+subtitles/*/
+!subtitles/.gitkeep
 release/
 
 # 系统文件
