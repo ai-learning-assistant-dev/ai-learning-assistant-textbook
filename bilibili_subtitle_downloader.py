@@ -14,6 +14,7 @@ import random
 from typing import Optional, Dict, List
 import argparse
 from pathlib import Path
+import process_video_info
 
 
 class BilibiliSubtitleDownloader:
@@ -147,7 +148,24 @@ class BilibiliSubtitleDownloader:
                 return None
         
         return None
-    
+
+    def save_video_info(self, video_info: Dict, output_path: str):
+        """
+        保存视频信息到JSON文件
+
+        Args:
+            video_info: 视频信息字典
+            output_path: 输出文件路径
+        """
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(video_info, f, ensure_ascii=False, indent=2)
+        tittle = video_info['title']
+        # 处理视频信息并生成Excel文件,并命名为video_info中的tittle字段.xlsx
+        process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
+
+        if self.debug:
+            print(f"[DEBUG] 视频信息已保存到: {output_path}")
+
     def get_subtitle_info(self, bvid: str, cid: int) -> Optional[List[Dict]]:
         """
         获取字幕信息（包括官方CC字幕和AI字幕，带重试机制）
@@ -476,6 +494,11 @@ class BilibiliSubtitleDownloader:
         title = video_info.get('title', bvid)
         result['title'] = title
         cover_url = video_info.get('pic', '')
+
+        # 保存视频信息到JSON文件
+        video_info_path = os.path.join(output_dir, title, "video_info.json")
+        os.makedirs(os.path.dirname(video_info_path), exist_ok=True)
+        self.save_video_info(video_info, video_info_path)
         
         # 清理文件名中的非法字符
         title = re.sub(r'[\\/:*?"<>|]', '_', title)
@@ -562,10 +585,7 @@ class BilibiliSubtitleDownloader:
                     continue
                 
                 # 构建输出文件名
-                if len(pages) > 1:
-                    filename = f"{page_title}_{lan}.{format_type}"
-                else:
-                    filename = f"subtitle_{lan}.{format_type}"
+                filename = f"{process_video_info.sanitize_filename(page_title)}_{lan}.{format_type}"
                 
                 output_path = os.path.join(video_dir, filename)
                 
