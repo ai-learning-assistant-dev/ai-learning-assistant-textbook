@@ -502,12 +502,30 @@ class BilibiliSubtitleDownloader:
         
         # 清理文件名中的非法字符
         title = re.sub(r'[\\/:*?"<>|]', '_', title)
-        
-        # 处理分P视频
-        pages = video_info.get('pages', [])
-        if not pages:
-            print("错误: 未找到视频分P信息")
-            return result
+        if 'ugc_season' in video_info and video_info['ugc_season'].get('sections'):
+            pages = []
+            # 这是一个合集/系列。遍历所有 sections 中的 episodes
+            for section in video_info['ugc_season']['sections']:
+                if section.get('episodes'):
+                    # 将每个 episode 转换为与原 pages 结构类似的字典，方便后续逻辑复用
+                    for episode in section['episodes']:
+                        # 提取关键信息，bvid 是下载字幕时可能需要传递的参数
+                        cid = episode.get('cid')
+                        page_title = episode.get('title') or episode.get('page', {}).get('part', '未知剧集')
+                        bvid_ep = episode.get('bvid')
+
+                        if cid:
+                            pages.append({
+                                'cid': cid,
+                                'part': page_title,
+                                'bvid': bvid_ep  # 存储bvid，以便在循环中使用
+                            })
+        else:
+            # 否则，使用顶层的 'pages' 字段作为分P列表（如果是普通视频）
+            pages = video_info.get('pages', [])
+            if not pages:
+                print("错误: 未找到视频分P信息")
+                return result
         
         # 先检查是否有可用字幕（不创建文件夹）
         has_subtitle = False
@@ -545,6 +563,8 @@ class BilibiliSubtitleDownloader:
         
         # 遍历每个分P下载字幕
         for page in pages:
+            # 优先使用剧集自己的 bvid，如果没有，则使用原始视频的 bvid
+            main_bvid = page.get('bvid') or bvid
             cid = page['cid']
             page_title = page.get('part', '第1P')
             
@@ -552,7 +572,7 @@ class BilibiliSubtitleDownloader:
                 print(f"\n处理分P: {page_title} (cid: {cid})")
             
             # 获取字幕信息
-            subtitles = self.get_subtitle_info(bvid, cid)
+            subtitles = self.get_subtitle_info(main_bvid, cid)
             
             if not subtitles:
                 print(f"此视频{'分P' if len(pages) > 1 else ''}没有字幕")

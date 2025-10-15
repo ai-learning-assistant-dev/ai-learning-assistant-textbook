@@ -69,8 +69,19 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
             sheet_chapters = workbook['chapters_sections']
             bvid = video_info.get('bvid')
             pages = video_info.get('pages', [])
-
-            if bvid and pages:
+            if video_info.get('ugc_season'):
+                episodes = video_info.get('ugc_season')['sections'][0]['episodes']
+                for index, episode in enumerate(episodes):
+                    current_row = index + 2
+                    duration_sec = episode.get('pages',[])[0].get('duration', 0)
+                    duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
+                    sheet_chapters.cell(row=current_row, column=1, value=index + 1)
+                    sheet_chapters.cell(row=current_row, column=4,
+                                        value=f"https://www.bilibili.com/video/{episode.get('bvid')}")
+                    sheet_chapters.cell(row=current_row, column=5,value=sanitize_filename(episode.get('title', '')))
+                    sheet_chapters.cell(row=current_row, column=6, value=index + 1)
+                    sheet_chapters.cell(row=current_row, column=7, value=duration_min)
+            else:
                 for index, page in enumerate(pages):
                     current_row = index + 2
                     duration_sec = page.get('duration', 0)
@@ -83,8 +94,6 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
                     sheet_chapters.cell(row=current_row, column=6, value=page.get('page', index + 1))
                     sheet_chapters.cell(row=current_row, column=7, value=duration_min)
                 print(f"'chapters_sections' 工作表数据填充完毕，共 {len(pages)} 条记录。")
-            else:
-                print("警告: JSON文件中缺少'bvid'或'pages'信息，无法填充'chapters_sections'表。")
         else:
             print("警告: 在模板文件中未找到名为 'chapters_sections' 的工作表。")
 
