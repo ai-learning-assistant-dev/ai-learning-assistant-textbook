@@ -111,22 +111,32 @@ python bilibili_subtitle_downloader.py "视频URL"
 
 ```
 subtitles/
-└── 视频标题/                        # 视频标题同名文件夹
-    ├── cover.jpg                    # 视频封面图片
-    ├── subtitle_ai-zh.srt           # 字幕文件（SRT格式）
-    ├── summary.json                 # 要点总结（JSON格式）
-    ├── content.md                   # 完整内容（Markdown格式）
-    ├── questions.json               # 预设问题（JSON格式）⭐新增
-    └── exercises.json               # 练习题（JSON格式）
+└── 视频标题/                                    # 视频标题同名文件夹
+    ├── cover.jpg                                # 视频封面图片
+    ├── video_info.json                          # 视频信息
+    ├── 视频标题.xlsx                            # Excel格式视频信息
+    ├── 字幕标题_ai-zh.srt                       # 字幕文件（SRT格式）
+    ├── 字幕标题_summary.json                    # 要点总结（JSON格式）
+    ├── 字幕标题_exercises.json                  # 练习题（JSON格式）
+    ├── 字幕标题_questions.json                  # 预设问题（JSON格式）⭐新增
+    └── markdown/                                # Markdown文件目录⭐新增
+        └── 字幕标题.md                          # 完整内容（Markdown格式）
 ```
 
 **文件说明：**
 - `cover.jpg` - 视频封面图片
-- `subtitle_ai-zh.srt` - 原始字幕文件
-- `summary.json` - AI生成的要点总结（3-8个关键要点，JSON格式）
-- `content.md` - AI生成的完整学习内容文档（详细、结构化）
-- `questions.json` - AI生成的预设问题（3个引导性问题）⭐
-- `exercises.json` - AI生成的练习题（5道选择题 + 5道简答题）
+- `video_info.json` - 视频详细信息（JSON格式）
+- `视频标题.xlsx` - 视频信息Excel表格
+- `字幕标题_ai-zh.srt` - 原始字幕文件（字幕标题通常与视频标题相同）
+- `字幕标题_summary.json` - AI生成的要点总结（3-8个关键要点）
+- `字幕标题_exercises.json` - AI生成的练习题（5道选择题 + 5道简答题）
+- `字幕标题_questions.json` - AI生成的预设问题（3个引导性问题）⭐
+- `markdown/字幕标题.md` - AI生成的完整学习内容文档（详细、结构化）⭐
+
+**🎯 多分P视频支持：**
+- 对于有多个分P的视频，每个分P都会生成独立的字幕文件和对应的AI处理文件
+- 文件名使用各自的字幕标题，不会相互覆盖
+- `cover.jpg`、`video_info.json`、`视频标题.xlsx` 在目录下只有一份
 
 ### 要点总结示例 (summary.json)
 
@@ -309,7 +319,11 @@ subtitles/
 ## 注意事项
 
 1. **Cookie必需**：下载AI字幕必须配置SESSDATA，Cookie有效期约30天
-2. **多P视频**：程序会自动下载所有分P的字幕并逐个生成总结
+2. **多P视频支持**：
+   - 程序会自动下载所有分P的字幕
+   - 每个分P都会生成独立的AI处理文件（summary.json、exercises.json等）
+   - 文件名使用各自的字幕标题，避免覆盖
+   - 共享文件（cover.jpg、video_info.json、xlsx）只生成一份
 3. **无字幕视频**：如果视频没有字幕，程序会跳过并不创建任何文件
 4. **反爬虫保护**：
    - 程序已内置请求延迟（默认2秒间隔）和重试机制（最多3次）

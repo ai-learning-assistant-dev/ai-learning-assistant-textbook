@@ -296,27 +296,66 @@ class SubtitleSummarizer:
         Returns:
             解析后的JSON对象
         """
-        # 尝试提取JSON部分
+        # 尝试提取JSON部分（支持多种格式）
+        json_text = None
+        
+        # 方法1: 提取 ```json ... ``` 代码块
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if json_match:
-            json_text = json_match.group(1)
+            json_text = json_match.group(1).strip()
+        # 方法2: 提取 ``` ... ``` 代码块（无json标记）
+        elif re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL):
+            code_match = re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL)
+            json_text = code_match.group(1).strip()
         else:
-            # 如果没有代码块，尝试直接解析
+            # 方法3: 直接使用原始文本
             json_text = response_text.strip()
         
-        try:
-            result = json.loads(json_text)
-            # 确保只保留 key_points 字段
-            if 'key_points' in result:
-                return {'key_points': result['key_points']}
-            return result
-        except json.JSONDecodeError as e:
-            print(f"警告：无法解析JSON响应: {e}")
-            print(f"原始响应：\n{response_text}\n")
-            return {
-                "key_points": [],
-                "raw_response": response_text
-            }
+        # 清理JSON文本（移除可能的BOM和不可见字符）
+        json_text = json_text.replace('\ufeff', '')  # 移除BOM
+        json_text = json_text.strip()
+        
+        # 尝试多种方式解析JSON
+        for attempt in range(3):
+            try:
+                if attempt == 0:
+                    # 第一次尝试：直接解析
+                    result = json.loads(json_text)
+                elif attempt == 1:
+                    # 第二次尝试：查找第一个 { 到最后一个 } 之间的内容
+                    start_idx = json_text.find('{')
+                    end_idx = json_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        json_text = json_text[start_idx:end_idx+1]
+                        result = json.loads(json_text)
+                    else:
+                        continue
+                else:
+                    # 第三次尝试：使用正则提取完整的JSON对象
+                    json_obj_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_text, re.DOTALL)
+                    if json_obj_match:
+                        result = json.loads(json_obj_match.group(0))
+                    else:
+                        continue
+                
+                # 解析成功，确保只保留 key_points 字段
+                if 'key_points' in result:
+                    return {'key_points': result['key_points']}
+                return result
+                
+            except json.JSONDecodeError as e:
+                if attempt == 2:  # 最后一次尝试
+                    print(f"警告：无法解析JSON响应: {e}")
+                    print(f"尝试的JSON文本：\n{json_text[:500]}...\n")
+                continue
+        
+        # 所有尝试都失败，返回错误格式
+        print(f"错误：JSON解析完全失败")
+        print(f"原始响应：\n{response_text[:500]}...\n")
+        return {
+            "key_points": [],
+            "raw_response": response_text
+        }
     
     def create_full_content_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """
@@ -618,25 +657,59 @@ class SubtitleSummarizer:
         Returns:
             解析后的练习题字典
         """
-        # 尝试提取JSON部分
+        # 尝试提取JSON部分（支持多种格式）
+        json_text = None
+        
+        # 方法1: 提取 ```json ... ``` 代码块
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if json_match:
-            json_text = json_match.group(1)
+            json_text = json_match.group(1).strip()
+        # 方法2: 提取 ``` ... ``` 代码块（无json标记）
+        elif re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL):
+            code_match = re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL)
+            json_text = code_match.group(1).strip()
         else:
-            # 如果没有代码块，尝试直接解析
+            # 方法3: 直接使用原始文本
             json_text = response_text.strip()
         
-        try:
-            result = json.loads(json_text)
-            return result
-        except json.JSONDecodeError as e:
-            print(f"警告：无法解析JSON响应: {e}")
-            print(f"原始响应：\n{response_text}\n")
-            return {
-                "multiple_choice": [],
-                "short_answer": [],
-                "raw_response": response_text
-            }
+        # 清理JSON文本
+        json_text = json_text.replace('\ufeff', '').strip()
+        
+        # 尝试多种方式解析JSON
+        for attempt in range(3):
+            try:
+                if attempt == 0:
+                    result = json.loads(json_text)
+                elif attempt == 1:
+                    start_idx = json_text.find('{')
+                    end_idx = json_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        json_text = json_text[start_idx:end_idx+1]
+                        result = json.loads(json_text)
+                    else:
+                        continue
+                else:
+                    json_obj_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_text, re.DOTALL)
+                    if json_obj_match:
+                        result = json.loads(json_obj_match.group(0))
+                    else:
+                        continue
+                
+                return result
+                
+            except json.JSONDecodeError as e:
+                if attempt == 2:
+                    print(f"警告：无法解析练习题JSON响应: {e}")
+                    print(f"尝试的JSON文本：\n{json_text[:500]}...\n")
+                continue
+        
+        # 所有尝试都失败
+        print(f"错误：练习题JSON解析完全失败")
+        return {
+            "multiple_choice": [],
+            "short_answer": [],
+            "raw_response": response_text
+        }
     
     def create_preset_questions_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """
@@ -761,24 +834,58 @@ class SubtitleSummarizer:
         Returns:
             解析后的问题字典
         """
-        # 尝试提取JSON部分
+        # 尝试提取JSON部分（支持多种格式）
+        json_text = None
+        
+        # 方法1: 提取 ```json ... ``` 代码块
         json_match = re.search(r'```json\s*(.*?)\s*```', response_text, re.DOTALL)
         if json_match:
-            json_text = json_match.group(1)
+            json_text = json_match.group(1).strip()
+        # 方法2: 提取 ``` ... ``` 代码块（无json标记）
+        elif re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL):
+            code_match = re.search(r'```\s*(.*?)\s*```', response_text, re.DOTALL)
+            json_text = code_match.group(1).strip()
         else:
-            # 如果没有代码块，尝试直接解析
+            # 方法3: 直接使用原始文本
             json_text = response_text.strip()
         
-        try:
-            result = json.loads(json_text)
-            return result
-        except json.JSONDecodeError as e:
-            print(f"警告：无法解析JSON响应: {e}")
-            print(f"原始响应：\n{response_text}\n")
-            return {
-                "questions": [],
-                "raw_response": response_text
-            }
+        # 清理JSON文本
+        json_text = json_text.replace('\ufeff', '').strip()
+        
+        # 尝试多种方式解析JSON
+        for attempt in range(3):
+            try:
+                if attempt == 0:
+                    result = json.loads(json_text)
+                elif attempt == 1:
+                    start_idx = json_text.find('{')
+                    end_idx = json_text.rfind('}')
+                    if start_idx != -1 and end_idx != -1:
+                        json_text = json_text[start_idx:end_idx+1]
+                        result = json.loads(json_text)
+                    else:
+                        continue
+                else:
+                    json_obj_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_text, re.DOTALL)
+                    if json_obj_match:
+                        result = json.loads(json_obj_match.group(0))
+                    else:
+                        continue
+                
+                return result
+                
+            except json.JSONDecodeError as e:
+                if attempt == 2:
+                    print(f"警告：无法解析预设问题JSON响应: {e}")
+                    print(f"尝试的JSON文本：\n{json_text[:500]}...\n")
+                continue
+        
+        # 所有尝试都失败
+        print(f"错误：预设问题JSON解析完全失败")
+        return {
+            "questions": [],
+            "raw_response": response_text
+        }
 
 
 def load_llm_config(config_file: str = 'config/llm_models.json', 

@@ -192,6 +192,16 @@ def main():
             print("-" * 80)
             
             try:
+                # 从字幕文件名中提取标题（去除扩展名和语言后缀）
+                subtitle_filename = os.path.basename(subtitle_file)
+                # 去除扩展名
+                subtitle_name = os.path.splitext(subtitle_filename)[0]
+                # 去除语言后缀（如 _ai-zh, _zh-CN 等）
+                subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
+                
+                if args.debug:
+                    print(f"[DEBUG] 字幕标题: {subtitle_title}")
+                
                 # 解析字幕
                 subtitles = SRTParser.parse_srt_file(subtitle_file)
                 print(f"解析到 {len(subtitles)} 条字幕")
@@ -204,8 +214,8 @@ def main():
                 print("📝 正在生成要点总结...")
                 summary = summarizer.summarize(subtitle_text, stream=args.stream)
                 
-                # 保存总结到文件（只保存JSON格式）
-                summary_json_file = os.path.join(video_dir, 'summary.json')
+                # 保存总结到文件（使用字幕标题命名）
+                summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
                 
                 with open(summary_json_file, 'w', encoding='utf-8') as f:
                     json.dump(summary, f, ensure_ascii=False, indent=2)
@@ -247,8 +257,12 @@ def main():
                     stream=args.stream
                 )
                 
-                # 保存完整内容为Markdown文件
-                full_content_file = os.path.join(video_dir, 'content.md')
+                # 创建markdown子目录
+                markdown_dir = os.path.join(video_dir, 'markdown')
+                os.makedirs(markdown_dir, exist_ok=True)
+                
+                # 保存完整内容为Markdown文件（放在markdown目录下，使用字幕标题命名）
+                full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
                 with open(full_content_file, 'w', encoding='utf-8') as f:
                     f.write(full_content)
                 
@@ -268,8 +282,8 @@ def main():
                     stream=args.stream
                 )
                 
-                # 保存练习题为JSON文件
-                exercises_file = os.path.join(video_dir, 'exercises.json')
+                # 保存练习题为JSON文件（使用字幕标题命名）
+                exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
                 with open(exercises_file, 'w', encoding='utf-8') as f:
                     json.dump(exercises, f, ensure_ascii=False, indent=2)
                 
@@ -295,8 +309,8 @@ def main():
                     stream=args.stream
                 )
                 
-                # 保存预设问题为JSON文件
-                questions_file = os.path.join(video_dir, 'questions.json')
+                # 保存预设问题为JSON文件（使用字幕标题命名）
+                questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
                 with open(questions_file, 'w', encoding='utf-8') as f:
                     json.dump(preset_questions, f, ensure_ascii=False, indent=2)
                 

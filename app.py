@@ -133,13 +133,8 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
         if not downloaded_files:
             raise Exception('此视频没有字幕，无法进行总结')
         
-        subtitle_file = downloaded_files[0]  # 使用第一个字幕文件
-        
-        # 更新状态：AI处理中
+        # 更新任务基本信息
         with tasks_lock:
-            tasks[task_id]['status'] = TaskStatus.SUMMARIZING
-            tasks[task_id]['message'] = f'正在生成AI内容 (1/4): 要点总结...'
-            tasks[task_id]['subtitle_file'] = subtitle_file
             tasks[task_id]['video_dir'] = video_dir
             tasks[task_id]['video_title'] = video_title
         
@@ -155,83 +150,109 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
             request_timeout=300
         )
         
-        # 解析字幕
-        subtitles = SRTParser.parse_srt_file(subtitle_file)
-        subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
-        
         # 创建总结器
         summarizer = SubtitleSummarizer(llm_client)
         
-        # ========== 1. 生成要点总结 ==========
-        summary = summarizer.summarize(subtitle_text, stream=False)
+        # 存储所有生成的文件
+        all_generated_files = []
         
-        # 保存总结（只保存JSON格式）
-        summary_json_file = os.path.join(video_dir, 'summary.json')
-        
-        with open(summary_json_file, 'w', encoding='utf-8') as f:
-            json.dump(summary, f, ensure_ascii=False, indent=2)
-        
-        # ========== 2. 生成完整内容文档 ==========
-        with tasks_lock:
-            tasks[task_id]['message'] = f'正在生成AI内容 (2/4): 完整文档...'
-        
-        # 预处理字幕文本
-        plain_text = SRTParser.extract_plain_text(subtitle_file)
-        
-        full_content = summarizer.generate_full_content(
-            plain_text,
-            video_title=video_title,
-            stream=False
-        )
-        
-        # 保存完整内容为Markdown文件
-        full_content_file = os.path.join(video_dir, 'content.md')
-        with open(full_content_file, 'w', encoding='utf-8') as f:
-            f.write(full_content)
-        
-        # ========== 3. 生成练习题 ==========
-        with tasks_lock:
-            tasks[task_id]['message'] = f'正在生成AI内容 (3/4): 练习题...'
-        
-        exercises = summarizer.generate_exercises(
-            plain_text,
-            video_title=video_title,
-            stream=False
-        )
-        
-        # 保存练习题为JSON文件
-        exercises_file = os.path.join(video_dir, 'exercises.json')
-        with open(exercises_file, 'w', encoding='utf-8') as f:
-            json.dump(exercises, f, ensure_ascii=False, indent=2)
-        
-        # ========== 4. 生成预设问题 ==========
-        with tasks_lock:
-            tasks[task_id]['message'] = f'正在生成AI内容 (4/4): 预设问题...'
-        
-        preset_questions = summarizer.generate_preset_questions(
-            plain_text,
-            video_title=video_title,
-            stream=False
-        )
-        
-        # 保存预设问题为JSON文件
-        questions_file = os.path.join(video_dir, 'questions.json')
-        with open(questions_file, 'w', encoding='utf-8') as f:
-            json.dump(preset_questions, f, ensure_ascii=False, indent=2)
-        
-        # 更新状态：完成
-        with tasks_lock:
-            tasks[task_id]['status'] = TaskStatus.COMPLETED
-            tasks[task_id]['message'] = '全部完成！已生成字幕、封面、总结、完整文档、练习题和预设问题'
-            tasks[task_id]['summary'] = summary
-            tasks[task_id]['files'] = {
-                'video_dir': video_dir,
-                'subtitle': subtitle_file,
-                'cover': cover_path,
+        # 遍历所有下载的字幕文件
+        total_files = len(downloaded_files)
+        for file_index, subtitle_file in enumerate(downloaded_files, 1):
+            # 从字幕文件名中提取标题
+            subtitle_filename = os.path.basename(subtitle_file)
+            subtitle_name = os.path.splitext(subtitle_filename)[0]
+            subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
+            
+            # 更新状态：AI处理中
+            with tasks_lock:
+                tasks[task_id]['status'] = TaskStatus.SUMMARIZING
+                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结...'
+                tasks[task_id]['subtitle_file'] = subtitle_file
+            
+            # 解析字幕
+            subtitles = SRTParser.parse_srt_file(subtitle_file)
+            subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+            
+            # ========== 1. 生成要点总结 ==========
+            summary = summarizer.summarize(subtitle_text, stream=False)
+            
+            # 保存总结（使用字幕标题命名）
+            summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
+            
+            with open(summary_json_file, 'w', encoding='utf-8') as f:
+                json.dump(summary, f, ensure_ascii=False, indent=2)
+            
+            # ========== 2. 生成完整内容文档 ==========
+            with tasks_lock:
+                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档...'
+            
+            # 预处理字幕文本
+            plain_text = SRTParser.extract_plain_text(subtitle_file)
+            
+            full_content = summarizer.generate_full_content(
+                plain_text,
+                video_title=video_title,
+                stream=False
+            )
+            
+            # 创建markdown子目录
+            markdown_dir = os.path.join(video_dir, 'markdown')
+            os.makedirs(markdown_dir, exist_ok=True)
+            
+            # 保存完整内容为Markdown文件（放在markdown目录下）
+            full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+            with open(full_content_file, 'w', encoding='utf-8') as f:
+                f.write(full_content)
+            
+            # ========== 3. 生成练习题 ==========
+            with tasks_lock:
+                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题...'
+            
+            exercises = summarizer.generate_exercises(
+                plain_text,
+                video_title=video_title,
+                stream=False
+            )
+            
+            # 保存练习题为JSON文件
+            exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
+            with open(exercises_file, 'w', encoding='utf-8') as f:
+                json.dump(exercises, f, ensure_ascii=False, indent=2)
+            
+            # ========== 4. 生成预设问题 ==========
+            with tasks_lock:
+                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题...'
+            
+            preset_questions = summarizer.generate_preset_questions(
+                plain_text,
+                video_title=video_title,
+                stream=False
+            )
+            
+            # 保存预设问题为JSON文件
+            questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
+            with open(questions_file, 'w', encoding='utf-8') as f:
+                json.dump(preset_questions, f, ensure_ascii=False, indent=2)
+            
+            # 记录本字幕生成的所有文件
+            all_generated_files.append({
+                'subtitle_title': subtitle_title,
+                'subtitle_file': subtitle_file,
                 'summary_json': summary_json_file,
                 'content_md': full_content_file,
                 'exercises': exercises_file,
                 'questions': questions_file
+            })
+        
+        # 更新状态：完成
+        with tasks_lock:
+            tasks[task_id]['status'] = TaskStatus.COMPLETED
+            tasks[task_id]['message'] = f'全部完成！已处理 {total_files} 个字幕文件，生成了字幕、封面、总结、完整文档、练习题和预设问题'
+            tasks[task_id]['files'] = {
+                'video_dir': video_dir,
+                'cover': cover_path,
+                'generated_files': all_generated_files
             }
             tasks[task_id]['completed_at'] = datetime.now().isoformat()
         
