@@ -495,7 +495,7 @@ class BilibiliSubtitleDownloader:
         result['title'] = title
         cover_url = video_info.get('pic', '')
         # 清理文件名中的非法字符
-        title = re.sub(r'[\\/:*?"<>| ]', '_', title)
+        title = process_video_info.sanitize_filename(title)
         # 保存视频信息到JSON文件
         video_info_path = os.path.join(output_dir, title, "video_info.json")
         os.makedirs(os.path.dirname(video_info_path), exist_ok=True)

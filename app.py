@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 
 from process_generated_content import save_data_to_excel
 from bilibili_subtitle_downloader import BilibiliSubtitleDownloader, load_cookies_from_file
+from process_video_info import sanitize_filename
 from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
 
@@ -246,7 +247,7 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
                 'questions': questions_file
             })
 
-        save_data_to_excel(f"{video_dir}/{video_title}.xlsx")
+        save_data_to_excel(f"{video_dir}/{sanitize_filename(video_title)}.xlsx")
         # 更新状态：完成
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.COMPLETED
