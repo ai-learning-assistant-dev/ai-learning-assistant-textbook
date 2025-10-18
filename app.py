@@ -33,6 +33,8 @@ class TaskStatus:
     SUMMARIZING = "summarizing"
     COMPLETED = "completed"
     FAILED = "failed"
+    STOPPING = "stopping"  # 正在停止中
+    STOPPED = "stopped"    # 已停止
 
 
 def load_models():
@@ -98,6 +100,13 @@ def save_app_config(config):
 def process_video_task(task_id, url, output_dir, model_name, cookies_file):
     """处理单个视频的下载和总结任务"""
     try:
+        # 检查停止标志
+        with tasks_lock:
+            if tasks[task_id].get('stop_flag'):
+                tasks[task_id]['status'] = TaskStatus.STOPPED
+                tasks[task_id]['message'] = '任务已停止'
+                return
+        
         # 更新状态：下载中
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.DOWNLOADING
@@ -133,6 +142,13 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
         if not downloaded_files:
             raise Exception('此视频没有字幕，无法进行总结')
         
+        # 检查停止标志
+        with tasks_lock:
+            if tasks[task_id].get('stop_flag'):
+                tasks[task_id]['status'] = TaskStatus.STOPPED
+                tasks[task_id]['message'] = '任务已停止'
+                return
+        
         # 更新任务基本信息
         with tasks_lock:
             tasks[task_id]['video_dir'] = video_dir
@@ -159,81 +175,136 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
         # 遍历所有下载的字幕文件
         total_files = len(downloaded_files)
         for file_index, subtitle_file in enumerate(downloaded_files, 1):
+            # 检查停止标志
+            with tasks_lock:
+                if tasks[task_id].get('stop_flag'):
+                    tasks[task_id]['status'] = TaskStatus.STOPPED
+                    tasks[task_id]['message'] = '任务已停止'
+                    return
+            
             # 从字幕文件名中提取标题
             subtitle_filename = os.path.basename(subtitle_file)
             subtitle_name = os.path.splitext(subtitle_filename)[0]
             subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
             
-            # 更新状态：AI处理中
-            with tasks_lock:
-                tasks[task_id]['status'] = TaskStatus.SUMMARIZING
-                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结...'
-                tasks[task_id]['subtitle_file'] = subtitle_file
+            # 定义所有可能生成的文件路径
+            summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
+            markdown_dir = os.path.join(video_dir, 'markdown')
+            full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+            exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
+            questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
             
-            # 解析字幕
-            subtitles = SRTParser.parse_srt_file(subtitle_file)
-            subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+            # 解析字幕（提前解析，供后续步骤使用）
+            subtitles = None
+            subtitle_text = None
+            plain_text = None
             
             # ========== 1. 生成要点总结 ==========
-            summary = summarizer.summarize(subtitle_text, stream=False)
+            if os.path.exists(summary_json_file):
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结已存在，跳过'
+            else:
+                with tasks_lock:
+                    tasks[task_id]['status'] = TaskStatus.SUMMARIZING
+                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结...'
+                    tasks[task_id]['subtitle_file'] = subtitle_file
+                
+                # 解析字幕
+                if subtitles is None:
+                    subtitles = SRTParser.parse_srt_file(subtitle_file)
+                    subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+                
+                summary = summarizer.summarize(subtitle_text, stream=False)
+                
+                with open(summary_json_file, 'w', encoding='utf-8') as f:
+                    json.dump(summary, f, ensure_ascii=False, indent=2)
             
-            # 保存总结（使用字幕标题命名）
-            summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
-            
-            with open(summary_json_file, 'w', encoding='utf-8') as f:
-                json.dump(summary, f, ensure_ascii=False, indent=2)
+            # 检查停止标志
+            with tasks_lock:
+                if tasks[task_id].get('stop_flag'):
+                    tasks[task_id]['status'] = TaskStatus.STOPPED
+                    tasks[task_id]['message'] = '任务已停止'
+                    return
             
             # ========== 2. 生成完整内容文档 ==========
+            if os.path.exists(full_content_file):
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档已存在，跳过'
+            else:
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档...'
+                
+                # 预处理字幕文本
+                if plain_text is None:
+                    plain_text = SRTParser.extract_plain_text(subtitle_file)
+                
+                full_content = summarizer.generate_full_content(
+                    plain_text,
+                    video_title=video_title,
+                    stream=False
+                )
+                
+                # 创建markdown子目录（如果不存在）
+                os.makedirs(markdown_dir, exist_ok=True)
+                
+                with open(full_content_file, 'w', encoding='utf-8') as f:
+                    f.write(full_content)
+            
+            # 检查停止标志
             with tasks_lock:
-                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档...'
-            
-            # 预处理字幕文本
-            plain_text = SRTParser.extract_plain_text(subtitle_file)
-            
-            full_content = summarizer.generate_full_content(
-                plain_text,
-                video_title=video_title,
-                stream=False
-            )
-            
-            # 创建markdown子目录
-            markdown_dir = os.path.join(video_dir, 'markdown')
-            os.makedirs(markdown_dir, exist_ok=True)
-            
-            # 保存完整内容为Markdown文件（放在markdown目录下）
-            full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
-            with open(full_content_file, 'w', encoding='utf-8') as f:
-                f.write(full_content)
+                if tasks[task_id].get('stop_flag'):
+                    tasks[task_id]['status'] = TaskStatus.STOPPED
+                    tasks[task_id]['message'] = '任务已停止'
+                    return
             
             # ========== 3. 生成练习题 ==========
+            if os.path.exists(exercises_file):
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题已存在，跳过'
+            else:
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题...'
+                
+                # 预处理字幕文本（如果还没有）
+                if plain_text is None:
+                    plain_text = SRTParser.extract_plain_text(subtitle_file)
+                
+                exercises = summarizer.generate_exercises(
+                    plain_text,
+                    video_title=video_title,
+                    stream=False
+                )
+                
+                with open(exercises_file, 'w', encoding='utf-8') as f:
+                    json.dump(exercises, f, ensure_ascii=False, indent=2)
+            
+            # 检查停止标志
             with tasks_lock:
-                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题...'
-            
-            exercises = summarizer.generate_exercises(
-                plain_text,
-                video_title=video_title,
-                stream=False
-            )
-            
-            # 保存练习题为JSON文件
-            exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
-            with open(exercises_file, 'w', encoding='utf-8') as f:
-                json.dump(exercises, f, ensure_ascii=False, indent=2)
+                if tasks[task_id].get('stop_flag'):
+                    tasks[task_id]['status'] = TaskStatus.STOPPED
+                    tasks[task_id]['message'] = '任务已停止'
+                    return
             
             # ========== 4. 生成预设问题 ==========
-            with tasks_lock:
-                tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题...'
-            
-            preset_questions = summarizer.generate_preset_questions(
-                plain_text,
-                video_title=video_title,
-                stream=False
-            )
-            
-            # 保存预设问题为JSON文件
-            questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
-            with open(questions_file, 'w', encoding='utf-8') as f:
-                json.dump(preset_questions, f, ensure_ascii=False, indent=2)
+            if os.path.exists(questions_file):
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题已存在，跳过'
+            else:
+                with tasks_lock:
+                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题...'
+                
+                # 预处理字幕文本（如果还没有）
+                if plain_text is None:
+                    plain_text = SRTParser.extract_plain_text(subtitle_file)
+                
+                preset_questions = summarizer.generate_preset_questions(
+                    plain_text,
+                    video_title=video_title,
+                    stream=False
+                )
+                
+                with open(questions_file, 'w', encoding='utf-8') as f:
+                    json.dump(preset_questions, f, ensure_ascii=False, indent=2)
             
             # 记录本字幕生成的所有文件
             all_generated_files.append({
@@ -463,6 +534,41 @@ def get_all_tasks():
             'success': True,
             'tasks': list(tasks.values())
         })
+
+
+@app.route('/api/tasks/<task_id>/stop', methods=['POST'])
+def stop_task(task_id):
+    """停止任务"""
+    try:
+        with tasks_lock:
+            task = tasks.get(task_id)
+            if not task:
+                return jsonify({
+                    'success': False,
+                    'error': '任务不存在'
+                }), 404
+            
+            # 如果任务已经完成、失败或停止，则不能再停止
+            if task['status'] in [TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.STOPPED]:
+                return jsonify({
+                    'success': False,
+                    'error': f'任务已经是{task["status"]}状态，无法停止'
+                }), 400
+            
+            # 设置停止标志和更新状态
+            task['stop_flag'] = True
+            task['status'] = TaskStatus.STOPPING
+            task['message'] = '正在停止任务，请等待当前步骤完成...'
+        
+        return jsonify({
+            'success': True,
+            'message': '停止信号已发送'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 
 @app.route('/api/config/cookies', methods=['GET'])

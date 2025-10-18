@@ -300,6 +300,14 @@
             border-left-color: #ff4757;
         }
 
+        .task-item.stopped {
+            border-left-color: #95a5a6;
+        }
+
+        .task-item.stopping {
+            border-left-color: #f39c12;
+        }
+
         .task-url {
             font-size: 14px;
             color: #333;
@@ -337,6 +345,16 @@
 
         .task-status.failed {
             background: #ff4757;
+            color: white;
+        }
+
+        .task-status.stopped {
+            background: #95a5a6;
+            color: white;
+        }
+
+        .task-status.stopping {
+            background: #f39c12;
             color: white;
         }
 
@@ -945,11 +963,14 @@
                     });
                     renderTasks();
                     
-                    // 如果所有任务都完成或失败，停止轮询
+                    // 如果所有任务都完成、失败、停止中或已停止，但如果有任务正在停止中，继续轮询
                     const allDone = data.tasks.every(t => 
-                        t.status === 'completed' || t.status === 'failed'
+                        t.status === 'completed' || t.status === 'failed' || t.status === 'stopped'
                     );
-                    if (allDone && data.tasks.length > 0) {
+                    const hasStopping = data.tasks.some(t => t.status === 'stopping');
+                    
+                    // 只有所有任务都完成且没有正在停止的任务时，才停止轮询
+                    if (allDone && !hasStopping && data.tasks.length > 0) {
                         clearInterval(pollInterval);
                         pollInterval = null;
                     }
@@ -974,6 +995,17 @@
             
             container.innerHTML = taskList.map(task => {
                 const statusText = getStatusText(task.status);
+                
+                // 停止按钮（只在进行中的任务显示，停止中的任务不显示）
+                let stopButtonHtml = '';
+                if ((task.status === 'downloading' || task.status === 'summarizing') && task.status !== 'stopping') {
+                    stopButtonHtml = `
+                        <button class="btn btn-danger btn-small" onclick="stopTask('${task.id}')" 
+                                style="margin-left: 10px;" title="停止任务">
+                            ⏹ 停止
+                        </button>
+                    `;
+                }
                 
                 // 如果任务完成，显示生成的文件列表
                 let filesHtml = '';
@@ -1001,8 +1033,9 @@
                     <div class="task-item ${task.status}">
                         <div class="task-url">${escapeHtml(task.url)}</div>
                         ${task.video_title ? `<div style="font-size: 13px; color: #666; margin-top: 4px;">📹 ${escapeHtml(task.video_title)}</div>` : ''}
-                        <div style="margin-top: 8px;">
+                        <div style="margin-top: 8px; display: flex; align-items: center;">
                             <span class="task-status ${task.status}">${statusText}</span>
+                            ${stopButtonHtml}
                         </div>
                         <div class="task-message">${escapeHtml(task.message)}</div>
                         ${filesHtml}
@@ -1024,9 +1057,36 @@
                 'downloading': '下载中',
                 'summarizing': '总结中',
                 'completed': '已完成',
-                'failed': '失败'
+                'failed': '失败',
+                'stopping': '正在停止',
+                'stopped': '已停止'
             };
             return statusMap[status] || status;
+        }
+
+        // 停止任务
+        async function stopTask(taskId) {
+            if (!confirm('确定要停止这个任务吗？')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/api/tasks/${taskId}/stop`, {
+                    method: 'POST'
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    // 立即刷新任务列表，不显示顶部提示
+                    // 停止状态会直接在任务列表中显示
+                    loadTasks();
+                } else {
+                    showAlert('taskAlert', '停止任务失败: ' + data.error, 'error');
+                }
+            } catch (error) {
+                showAlert('taskAlert', '停止任务失败: ' + error.message, 'error');
+            }
         }
 
         // 显示提示信息

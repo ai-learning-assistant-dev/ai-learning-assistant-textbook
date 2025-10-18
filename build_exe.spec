@@ -8,10 +8,12 @@ a = Analysis(
     binaries=[],
     datas=[
         ('templates', 'templates'),
+        ('模板.xlsx', '.'),
         ('bilibili_subtitle_downloader.py', '.'),
         ('download_and_summarize.py', '.'),
         ('llm_client.py', '.'),
         ('subtitle_summarizer.py', '.'),
+        ('process_video_info.py', '.'),
         ('app.py', '.'),
     ],
     hiddenimports=[
@@ -22,6 +24,10 @@ a = Analysis(
         'click',
         'itsdangerous',
         'markupsafe',
+        'openpyxl',
+        'openpyxl.styles',
+        'openpyxl.cell',
+        'openpyxl.workbook',
     ],
     hookspath=[],
     hooksconfig={},
