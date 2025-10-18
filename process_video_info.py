@@ -11,7 +11,7 @@ def sanitize_filename(filename):
     非法字符包括: \ / : * ? " < > |
     """
     # 将所有非法字符替换为下划线 '_'
-    return re.sub(r'[\/:*?"<>|]', '_', filename)
+    return re.sub(r'[\\/:*?"<>| ]', '_', filename)
 
 
 def process_video_to_excel_final(json_file_path, template_excel_path):
