@@ -71,6 +71,10 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
             pages = video_info.get('pages', [])
             if video_info.get('ugc_season'):
                 episodes = video_info.get('ugc_season')['sections'][0]['episodes']
+                if len(episodes)==1 and 'pages' in episodes[0]:
+                    pages = episodes[0]['pages']
+                    print()
+            if video_info.get('ugc_season') and len(episodes) > 1:
                 for index, episode in enumerate(episodes):
                     current_row = index + 2
                     duration_sec = episode.get('pages',[])[0].get('duration', 0)
