@@ -494,14 +494,14 @@ class BilibiliSubtitleDownloader:
         title = video_info.get('title', bvid)
         result['title'] = title
         cover_url = video_info.get('pic', '')
-
+        # 清理文件名中的非法字符
+        title = re.sub(r'[\\/:*?"<>| ]', '_', title)
         # 保存视频信息到JSON文件
         video_info_path = os.path.join(output_dir, title, "video_info.json")
         os.makedirs(os.path.dirname(video_info_path), exist_ok=True)
         self.save_video_info(video_info, video_info_path)
         
-        # 清理文件名中的非法字符
-        title = re.sub(r'[\\/:*?"<>| ]', '_', title)
+
         if 'ugc_season' in video_info and video_info['ugc_season'].get('sections'):
             pages = []
             # 这是一个合集/系列。遍历所有 sections 中的 episodes
