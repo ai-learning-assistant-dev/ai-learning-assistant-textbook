@@ -444,7 +444,7 @@ class BilibiliSubtitleDownloader:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     def download(self, video_url: str, output_dir: str = 'subtitles', 
-                 format_type: str = 'srt', language: Optional[str] = None,
+                 format_type: str = 'srt', language: Optional[str] = 'ai-zh',
                  download_cover: bool = True) -> Dict[str, any]:
         """
         下载视频字幕和封面的主函数
@@ -501,7 +501,7 @@ class BilibiliSubtitleDownloader:
         self.save_video_info(video_info, video_info_path)
         
         # 清理文件名中的非法字符
-        title = re.sub(r'[\\/:*?"<>|]', '_', title)
+        title = re.sub(r'[\\/:*?"<>| ]', '_', title)
         if 'ugc_season' in video_info and video_info['ugc_season'].get('sections'):
             pages = []
             # 这是一个合集/系列。遍历所有 sections 中的 episodes

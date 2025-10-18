@@ -14,6 +14,7 @@ from datetime import datetime
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
+from process_generated_content import save_data_to_excel
 from bilibili_subtitle_downloader import BilibiliSubtitleDownloader, load_cookies_from_file
 from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
@@ -156,7 +157,7 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
         # 存储所有生成的文件
         all_generated_files = []
         
-        # 遍历所有下载的字幕文件
+        # 遍历所有下载的中文字幕文件
         total_files = len(downloaded_files)
         for file_index, subtitle_file in enumerate(downloaded_files, 1):
             # 从字幕文件名中提取标题
@@ -244,7 +245,8 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
                 'exercises': exercises_file,
                 'questions': questions_file
             })
-        
+
+        save_data_to_excel(f"{video_dir}/{video_title}.xlsx")
         # 更新状态：完成
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.COMPLETED
