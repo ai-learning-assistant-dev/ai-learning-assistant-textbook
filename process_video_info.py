@@ -64,27 +64,48 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
         else:
             print("警告: 在模板文件中未找到名为 'course' 的工作表。")
 
+        # 处理合集/系列视频的分P信息
+        if 'ugc_season' in video_info and video_info['ugc_season'].get('sections'):
+            pages = []
+            # 这是一个合集/系列。遍历所有 sections 中的 episodes
+            for section in video_info['ugc_season']['sections']:
+                if section.get('episodes'):
+                    # 将每个 episode 转换为与原 pages 结构类似的字典，方便后续逻辑复用
+                    for episode in section['episodes']:
+                        # 提取关键信息，bvid 是下载字幕时可能需要传递的参数
+                        cid = episode.get('cid')
+                        page_title = episode.get('title') or episode.get('page', {}).get('part', '未知剧集')
+                        duration_sec = episode.get('pages', [])[0].get('duration', 0)
+                        duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
+                        bvid_ep = episode.get('bvid')
+
+                        if cid:
+                            pages.append({
+                                'cid': cid,
+                                'part': page_title,
+                                'bvid': bvid_ep,  # 存储bvid，以便在循环中使用
+                                'duration': duration_min
+                            })
+        else:
+            # 否则，使用顶层的 'pages' 字段作为分P列表（如果是普通视频）
+            pages = video_info.get('pages', [])
+            if not pages:
+                print("错误: 未找到视频分P信息")
+                return
+
         # 6. 填充 'chapters_sections' 工作表 (使用原始数据)
         if 'chapters_sections' in workbook.sheetnames:
             sheet_chapters = workbook['chapters_sections']
             bvid = video_info.get('bvid')
-            pages = video_info.get('pages', [])
             if video_info.get('ugc_season'):
-                episodes = video_info.get('ugc_season')['sections'][0]['episodes']
-                if len(episodes)==1 and 'pages' in episodes[0]:
-                    pages = episodes[0]['pages']
-                    print()
-            if video_info.get('ugc_season') and len(episodes) > 1:
-                for index, episode in enumerate(episodes):
+                for index, episode in enumerate(pages):
                     current_row = index + 2
-                    duration_sec = episode.get('pages',[])[0].get('duration', 0)
-                    duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
                     sheet_chapters.cell(row=current_row, column=1, value=index + 1)
                     sheet_chapters.cell(row=current_row, column=4,
                                         value=f"https://www.bilibili.com/video/{episode.get('bvid')}")
-                    sheet_chapters.cell(row=current_row, column=5,value=sanitize_filename(episode.get('title', '')))
+                    sheet_chapters.cell(row=current_row, column=5,value=sanitize_filename(episode.get('part', '')))
                     sheet_chapters.cell(row=current_row, column=6, value=index + 1)
-                    sheet_chapters.cell(row=current_row, column=7, value=duration_min)
+                    sheet_chapters.cell(row=current_row, column=7, value=episode.get('duration'))
             else:
                 for index, page in enumerate(pages):
                     current_row = index + 2
