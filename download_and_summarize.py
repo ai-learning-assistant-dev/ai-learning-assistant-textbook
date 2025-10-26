@@ -30,6 +30,12 @@ def main():
   # 基本使用（使用cookies.txt和默认模型）
   python download_and_summarize.py "https://www.bilibili.com/video/BV1xx411c7mu"
   
+  # 处理收藏夹内所有视频
+  python download_and_summarize.py "https://space.bilibili.com/UID/favlist?fid=收藏夹ID" -n 模型名称
+  
+  # 收藏夹+自定义文件夹名称
+  python download_and_summarize.py "收藏夹URL" -f "Python学习合集" -n 模型名称
+  
   # 通过名称指定模型（推荐）
   python download_and_summarize.py "视频URL" -n aivmz8bq80
   
@@ -39,8 +45,11 @@ def main():
   # 使用流式输出总结过程
   python download_and_summarize.py "视频URL" -n aivmz8bq80 --stream
   
-  # 指定输出目录
+  # 指定输出根目录
   python download_and_summarize.py "视频URL" -o ./output
+  
+  # 自定义输出文件夹名称
+  python download_and_summarize.py "视频URL" -f "我的学习资料"
   
   # 只下载不总结
   python download_and_summarize.py "视频URL" --download-only
@@ -49,7 +58,9 @@ def main():
     
     parser.add_argument('url', nargs='?', help='Bilibili视频URL')
     parser.add_argument('-o', '--output', default='subtitles',
-                       help='输出目录（默认：subtitles）')
+                       help='输出根目录（默认：subtitles）')
+    parser.add_argument('-f', '--folder-name', default=None,
+                       help='自定义输出文件夹名称（默认：使用视频标题）')
     parser.add_argument('-m', '--model-index', type=int, default=None,
                        help='使用的模型索引（默认：0）')
     parser.add_argument('-n', '--model-name', default=None,
@@ -78,7 +89,7 @@ def main():
     # 检查是否提供了URL
     if not args.url:
         parser.print_help()
-        print("\n错误：请提供视频URL，或使用 --list-models 查看可用模型")
+        print("\n错误：请提供视频URL或收藏夹URL，或使用 --list-models 查看可用模型")
         sys.exit(1)
     
     print("=" * 80)
@@ -86,104 +97,153 @@ def main():
     print("=" * 80)
     print()
     
-    # ========== 第一步：下载字幕 ==========
-    print("🎬 第一步：下载视频字幕")
-    print("-" * 80)
+    # 从配置文件加载Cookie
+    config_cookies = load_cookies_from_file(args.config)
+    sessdata = config_cookies.get('sessdata')
     
-    try:
-        # 从配置文件加载Cookie
-        config_cookies = load_cookies_from_file(args.config)
-        sessdata = config_cookies.get('sessdata')
-        
-        if not sessdata:
-            print("警告：未在配置文件中找到SESSDATA，可能无法下载AI字幕")
-        
-        # 创建下载器（启用反爬虫保护）
-        downloader = BilibiliSubtitleDownloader(
-            sessdata=sessdata,
-            bili_jct=config_cookies.get('bili_jct'),
-            buvid3=config_cookies.get('buvid3'),
-            debug=args.debug,
-            request_delay=2.0,  # 请求间隔2秒
-            max_retries=3       # 最多重试3次
-        )
-        
-        # 下载字幕和封面
-        print(f"视频URL: {args.url}")
-        print(f"输出目录: {args.output}")
-        print()
-        
-        download_result = downloader.download(
-            video_url=args.url,
-            output_dir=args.output,
-            format_type='srt',
-            download_cover=True
-        )
-        
-        downloaded_files = download_result.get('subtitles', [])
-        cover_path = download_result.get('cover')
-        video_title = download_result.get('title', '')
-        video_dir = download_result.get('video_dir', args.output)
-        
-        print()
-        
-        # 检查是否成功下载了字幕
-        if not downloaded_files:
-            print("❌ 此视频没有字幕，无法进行总结")
-            sys.exit(0)
-        
-        print("✅ 字幕下载完成！")
-        if cover_path:
-            print(f"✅ 封面图片已保存: {cover_path}")
-        print(f"✅ 所有文件保存在: {video_dir}")
-        print()
-        
-    except Exception as e:
-        print(f"❌ 下载字幕时出错: {e}")
-        if args.debug:
-            import traceback
-            traceback.print_exc()
-        sys.exit(1)
+    if not sessdata:
+        print("警告：未在配置文件中找到SESSDATA，可能无法下载AI字幕")
     
-    # 如果只需要下载，则退出
-    if args.download_only:
-        print("已完成下载，跳过总结步骤")
-        return
+    # 创建下载器（启用反爬虫保护）
+    downloader = BilibiliSubtitleDownloader(
+        sessdata=sessdata,
+        bili_jct=config_cookies.get('bili_jct'),
+        buvid3=config_cookies.get('buvid3'),
+        debug=args.debug,
+        request_delay=2.0,  # 请求间隔2秒
+        max_retries=3       # 最多重试3次
+    )
     
-    # ========== 第二步：AI生成要点总结 ==========
-    print("🤖 第二步：AI生成要点总结")
-    print("-" * 80)
-    
-    try:
-        # 加载LLM配置
-        if not os.path.exists(args.llm_config):
-            print(f"❌ 错误：LLM配置文件不存在: {args.llm_config}")
+    # 检查是否为收藏夹URL
+    video_urls = []
+    if downloader.is_favorite_url(args.url):
+        print("🗂️  检测到收藏夹URL")
+        print("-" * 80)
+        fid = downloader.extract_fid(args.url)
+        if not fid:
+            print("❌ 错误：无法从URL中提取收藏夹ID")
             sys.exit(1)
         
-        model_config = load_llm_config(
-            args.llm_config, 
-            model_index=args.model_index,
-            model_name=args.model_name
-        )
-        print(f"使用模型: {model_config['name']}")
-        print(f"API地址: {model_config['api_base']}")
+        print(f"收藏夹ID: {fid}")
+        print("正在获取收藏夹视频列表...")
         print()
         
-        # 创建LLM客户端
-        llm_client = OpenAICompatClient(
-            api_base=model_config['api_base'],
-            api_key=model_config['api_key'],
-            default_model=model_config['model_name'],
-            request_timeout=300
-        )
+        videos = downloader.get_favorite_videos(fid)
+        if not videos:
+            print("❌ 收藏夹为空或无法访问")
+            sys.exit(1)
         
-        # 统计
-        total_files = len(downloaded_files)
-        success_count = 0
-        failed_count = 0
+        print(f"✅ 找到 {len(videos)} 个视频")
+        print()
         
-        # 遍历所有下载的字幕文件，对每个都进行总结
-        for index, subtitle_file in enumerate(downloaded_files, 1):
+        for video in videos:
+            video_url = f"https://www.bilibili.com/video/{video['bvid']}"
+            video_urls.append((video_url, video['title']))
+    else:
+        # 普通视频URL
+        video_urls.append((args.url, None))
+    
+    # 遍历所有视频进行处理
+    total_videos = len(video_urls)
+    success_videos = 0
+    failed_videos = 0
+    
+    for video_index, (video_url, video_title_hint) in enumerate(video_urls, 1):
+        if total_videos > 1:
+            print()
+            print("=" * 80)
+            print(f"📹 处理视频 {video_index}/{total_videos}")
+            if video_title_hint:
+                print(f"标题: {video_title_hint}")
+            print("=" * 80)
+            print()
+        
+        # ========== 第一步：下载字幕 ==========
+        print("🎬 第一步：下载视频字幕")
+        print("-" * 80)
+        
+        try:
+            # 下载字幕和封面
+            print(f"视频URL: {video_url}")
+            print(f"输出目录: {args.output}")
+            print()
+            
+            download_result = downloader.download(
+                video_url=video_url,
+                output_dir=args.output,
+                format_type='srt',
+                download_cover=True,
+                custom_folder_name=args.folder_name
+            )
+            
+            downloaded_files = download_result.get('subtitles', [])
+            cover_path = download_result.get('cover')
+            video_title = download_result.get('title', '')
+            video_dir = download_result.get('video_dir', args.output)
+        
+            print()
+            
+            # 检查是否成功下载了字幕
+            if not downloaded_files:
+                print("❌ 此视频没有字幕，无法进行总结")
+                failed_videos += 1
+                continue
+            
+            print("✅ 字幕下载完成！")
+            if cover_path:
+                print(f"✅ 封面图片已保存: {cover_path}")
+            print(f"✅ 所有文件保存在: {video_dir}")
+            print()
+            
+        except Exception as e:
+            print(f"❌ 下载字幕时出错: {e}")
+            if args.debug:
+                import traceback
+                traceback.print_exc()
+            failed_videos += 1
+            continue
+        
+        # 如果只需要下载，则跳过总结步骤
+        if args.download_only:
+            print("已完成下载，跳过总结步骤")
+            success_videos += 1
+            continue
+    
+        # ========== 第二步：AI生成要点总结 ==========
+        print("🤖 第二步：AI生成要点总结")
+        print("-" * 80)
+        
+        try:
+            # 加载LLM配置
+            if not os.path.exists(args.llm_config):
+                print(f"❌ 错误：LLM配置文件不存在: {args.llm_config}")
+                failed_videos += 1
+                continue
+        
+            model_config = load_llm_config(
+                args.llm_config, 
+                model_index=args.model_index,
+                model_name=args.model_name
+            )
+            print(f"使用模型: {model_config['name']}")
+            print(f"API地址: {model_config['api_base']}")
+            print()
+            
+            # 创建LLM客户端
+            llm_client = OpenAICompatClient(
+                api_base=model_config['api_base'],
+                api_key=model_config['api_key'],
+                default_model=model_config['model_name'],
+                request_timeout=300
+            )
+            
+            # 统计
+            total_files = len(downloaded_files)
+            success_count = 0
+            failed_count = 0
+            
+            # 遍历所有下载的字幕文件，对每个都进行总结
+            for index, subtitle_file in enumerate(downloaded_files, 1):
             print()
             print("=" * 80)
             if total_files > 1:
@@ -192,63 +252,63 @@ def main():
             print("-" * 80)
             
             try:
-                # 从字幕文件名中提取标题（去除扩展名和语言后缀）
-                subtitle_filename = os.path.basename(subtitle_file)
-                # 去除扩展名
-                subtitle_name = os.path.splitext(subtitle_filename)[0]
-                # 去除语言后缀（如 _ai-zh, _zh-CN 等）
-                subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
-                
-                if args.debug:
-                    print(f"[DEBUG] 字幕标题: {subtitle_title}")
-                
-                # 定义所有可能生成的文件路径
-                summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
-                markdown_dir = os.path.join(video_dir, 'markdown')
-                full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
-                exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
-                questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
-                
-                # 解析字幕（提前解析，供后续步骤使用）
-                subtitles = None
-                subtitle_text = None
-                plain_text = None
-                summarizer = SubtitleSummarizer(llm_client)
-                
-                # ========== 1. 生成要点总结 ==========
-                if os.path.exists(summary_json_file):
-                    print("📝 要点总结文件已存在，跳过")
-                    print(f"   JSON格式: {summary_json_file}")
-                else:
-                    print("📝 正在生成要点总结...")
+                    # 从字幕文件名中提取标题（去除扩展名和语言后缀）
+                    subtitle_filename = os.path.basename(subtitle_file)
+                    # 去除扩展名
+                    subtitle_name = os.path.splitext(subtitle_filename)[0]
+                    # 去除语言后缀（如 _ai-zh, _zh-CN 等）
+                    subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
                     
-                    # 解析字幕
-                    if subtitles is None:
-                        subtitles = SRTParser.parse_srt_file(subtitle_file)
-                        print(f"解析到 {len(subtitles)} 条字幕")
-                        subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+                    if args.debug:
+                        print(f"[DEBUG] 字幕标题: {subtitle_title}")
                     
-                    summary = summarizer.summarize(subtitle_text, stream=args.stream)
+                    # 定义所有可能生成的文件路径
+                    summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
+                    markdown_dir = os.path.join(video_dir, 'markdown')
+                    full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+                    exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
+                    questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
                     
-                    with open(summary_json_file, 'w', encoding='utf-8') as f:
-                        json.dump(summary, f, ensure_ascii=False, indent=2)
+                    # 解析字幕（提前解析，供后续步骤使用）
+                    subtitles = None
+                    subtitle_text = None
+                    plain_text = None
+                    summarizer = SubtitleSummarizer(llm_client)
                     
-                    print()
-                    print("✅ 要点总结已保存：")
-                    print(f"   JSON格式: {summary_json_file}")
-                    
-                    # 显示要点总结（终端输出）
-                    print()
-                    print("=" * 80)
-                    print("📋 要点总结预览：")
-                    print("=" * 80)
-                    key_points = summary.get('key_points', [])
-                    print(f"\n🎯 关键要点（共 {len(key_points)} 个）：\n")
-                    for i, point in enumerate(key_points, 1):
-                        time = point.get('time', '')
-                        title = point.get('title', '')
-                        print(f"{i}. [{time}] {title}")
-                    print("=" * 80)
+                    # ========== 1. 生成要点总结 ==========
+                    if os.path.exists(summary_json_file):
+                        print("📝 要点总结文件已存在，跳过")
+                        print(f"   JSON格式: {summary_json_file}")
+                    else:
+                        print("📝 正在生成要点总结...")
+                        
+                        # 解析字幕
+                        if subtitles is None:
+                            subtitles = SRTParser.parse_srt_file(subtitle_file)
+                            print(f"解析到 {len(subtitles)} 条字幕")
+                            subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+                        
+                        summary = summarizer.summarize(subtitle_text, stream=args.stream)
+                        
+                        with open(summary_json_file, 'w', encoding='utf-8') as f:
+                            json.dump(summary, f, ensure_ascii=False, indent=2)
+                        
+                        print()
+                        print("✅ 要点总结已保存：")
+                        print(f"   JSON格式: {summary_json_file}")
+                        
+                        # 显示要点总结（终端输出）
+                        print()
+                        print("=" * 80)
+                        print("📋 要点总结预览：")
+                        print("=" * 80)
+                        key_points = summary.get('key_points', [])
+                        print(f"\n🎯 关键要点（共 {len(key_points)} 个）：\n")
+                        for i, point in enumerate(key_points, 1):
+                            time = point.get('time', '')
+                            title = point.get('title', '')
+                            print(f"{i}. [{time}] {title}")
+                        print("=" * 80)
                 
                 # ========== 2. 生成完整内容文档 ==========
                 print()
@@ -355,34 +415,50 @@ def main():
                         for q in preset_questions.get('questions', []):
                             print(f"   {q.get('id')}. {q.get('question')}")
                 
-                success_count += 1
-                
-            except Exception as e:
-                print(f"❌ 处理此字幕文件时出错: {e}")
-                if args.debug:
-                    import traceback
-                    traceback.print_exc()
-                failed_count += 1
-                # 继续处理下一个文件，而不是直接退出
-                continue
-        
-        # 输出最终统计
+                    success_count += 1
+                    
+                except Exception as e:
+                    print(f"❌ 处理此字幕文件时出错: {e}")
+                    if args.debug:
+                        import traceback
+                        traceback.print_exc()
+                    failed_count += 1
+                    # 继续处理下一个文件，而不是直接退出
+                    continue
+            
+            # 输出本视频处理统计
+            print()
+            print("=" * 80)
+            print(f"✅ 视频处理完成: {video_title}")
+            print("-" * 80)
+            print(f"总共处理: {total_files} 个字幕文件")
+            print(f"成功: {success_count} 个")
+            if failed_count > 0:
+                print(f"失败: {failed_count} 个")
+            print("=" * 80)
+            
+            success_videos += 1
+            
+        except Exception as e:
+            print(f"❌ 处理视频时出错: {e}")
+            if args.debug:
+                import traceback
+                traceback.print_exc()
+            failed_videos += 1
+            continue
+    
+    # 输出最终总体统计（针对收藏夹批量处理）
+    if total_videos > 1:
+        print()
         print()
         print("=" * 80)
-        print("🎉 全部完成！")
-        print("-" * 80)
-        print(f"总共处理: {total_files} 个字幕文件")
-        print(f"成功: {success_count} 个")
-        if failed_count > 0:
-            print(f"失败: {failed_count} 个")
+        print("🎉 全部任务完成！")
         print("=" * 80)
-        
-    except Exception as e:
-        print(f"❌ 生成总结时出错: {e}")
-        if args.debug:
-            import traceback
-            traceback.print_exc()
-        sys.exit(1)
+        print(f"总共处理视频数: {total_videos} 个")
+        print(f"成功: {success_videos} 个")
+        if failed_videos > 0:
+            print(f"失败: {failed_videos} 个")
+        print("=" * 80)
 
 
 if __name__ == '__main__':

@@ -102,6 +102,114 @@ class BilibiliSubtitleDownloader:
             return match.group(0)
         return None
     
+    def extract_fid(self, url: str) -> Optional[str]:
+        """
+        从收藏夹URL中提取收藏夹ID
+        
+        Args:
+            url: Bilibili收藏夹URL
+            
+        Returns:
+            收藏夹ID，如果提取失败返回None
+        """
+        # 匹配收藏夹ID的正则表达式
+        # 格式: https://space.bilibili.com/UID/favlist?fid=FAVID
+        pattern = r'fid=(\d+)'
+        match = re.search(pattern, url)
+        
+        if match:
+            return match.group(1)
+        return None
+    
+    def is_favorite_url(self, url: str) -> bool:
+        """
+        判断URL是否为收藏夹URL
+        
+        Args:
+            url: URL字符串
+            
+        Returns:
+            是否为收藏夹URL
+        """
+        return 'favlist' in url or 'fav' in url
+    
+    def get_favorite_videos(self, fid: str, max_count: Optional[int] = None) -> List[Dict]:
+        """
+        获取收藏夹内的视频列表
+        
+        Args:
+            fid: 收藏夹ID
+            max_count: 最大获取数量，None表示获取全部
+            
+        Returns:
+            视频信息列表
+        """
+        videos = []
+        page_size = 20
+        page_num = 1
+        
+        if self.debug:
+            print(f"[DEBUG] 开始获取收藏夹 {fid} 的视频列表")
+        
+        while True:
+            try:
+                self._wait_if_needed()
+                
+                # B站收藏夹API
+                api_url = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&ps={page_size}&pn={page_num}'
+                
+                if self.debug:
+                    print(f"[DEBUG] 请求收藏夹API (第{page_num}页): {api_url}")
+                
+                response = requests.get(api_url, headers=self.headers, cookies=self.cookies, timeout=10)
+                response.raise_for_status()
+                data = response.json()
+                
+                if data.get('code') != 0:
+                    print(f"获取收藏夹信息失败: {data.get('message')}")
+                    break
+                
+                result_data = data.get('data', {})
+                medias = result_data.get('medias', [])
+                
+                if not medias:
+                    break
+                
+                for media in medias:
+                    video_info = {
+                        'bvid': media.get('bvid'),
+                        'title': media.get('title'),
+                        'intro': media.get('intro'),
+                        'cover': media.get('cover'),
+                        'upper': media.get('upper', {}).get('name'),
+                        'duration': media.get('duration')
+                    }
+                    videos.append(video_info)
+                    
+                    if self.debug:
+                        print(f"[DEBUG] 找到视频: {video_info['title']} ({video_info['bvid']})")
+                    
+                    # 如果达到最大数量限制，停止获取
+                    if max_count and len(videos) >= max_count:
+                        break
+                
+                # 检查是否还有更多页
+                has_more = result_data.get('has_more', False)
+                if not has_more or (max_count and len(videos) >= max_count):
+                    break
+                
+                page_num += 1
+                
+            except Exception as e:
+                print(f"获取收藏夹视频列表时出错: {e}")
+                if self.debug:
+                    import traceback
+                    traceback.print_exc()
+                break
+        
+        print(f"收藏夹内找到 {len(videos)} 个视频")
+        return videos
+    
     def get_video_info(self, bvid: str) -> Optional[Dict]:
         """
         获取视频信息，包括cid（带重试机制）
@@ -445,7 +553,7 @@ class BilibiliSubtitleDownloader:
     
     def download(self, video_url: str, output_dir: str = 'subtitles', 
                  format_type: str = 'srt', language: Optional[str] = 'ai-zh',
-                 download_cover: bool = True) -> Dict[str, any]:
+                 download_cover: bool = True, custom_folder_name: Optional[str] = None) -> Dict[str, any]:
         """
         下载视频字幕和封面的主函数
         
@@ -455,6 +563,7 @@ class BilibiliSubtitleDownloader:
             format_type: 输出格式 (srt/json/txt)
             language: 指定语言，None则下载所有语言
             download_cover: 是否下载封面图片（默认True）
+            custom_folder_name: 自定义输出文件夹名称，None则使用视频标题
             
         Returns:
             包含下载结果的字典：
@@ -496,11 +605,6 @@ class BilibiliSubtitleDownloader:
         cover_url = video_info.get('pic', '')
         # 清理文件名中的非法字符
         title = process_video_info.sanitize_filename(title)
-        # 保存视频信息到JSON文件
-        video_info_path = os.path.join(output_dir, title, "video_info.json")
-        os.makedirs(os.path.dirname(video_info_path), exist_ok=True)
-        self.save_video_info(video_info, video_info_path)
-        
 
         if 'ugc_season' in video_info and video_info['ugc_season'].get('sections'):
             pages = []
@@ -541,12 +645,19 @@ class BilibiliSubtitleDownloader:
             return result
         
         # 确认有字幕后，才创建输出目录和下载封面
-        video_dir = os.path.join(output_dir, title)
+        # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
+        folder_name = custom_folder_name if custom_folder_name else title
+        video_dir = os.path.join(output_dir, folder_name)
         os.makedirs(video_dir, exist_ok=True)
         result['video_dir'] = video_dir
         print(f"输出目录: {video_dir}")
         
-        # 下载封面图片
+        # 保存视频信息到JSON文件（带视频标题前缀）
+        video_info_filename = f"{title}_video_info.json"
+        video_info_path = os.path.join(video_dir, video_info_filename)
+        self.save_video_info(video_info, video_info_path)
+        
+        # 下载封面图片（带视频标题前缀）
         if download_cover and cover_url:
             print(f"\n下载视频封面...")
             # 从URL中提取文件扩展名，如果没有则使用.jpg
@@ -554,7 +665,7 @@ class BilibiliSubtitleDownloader:
             parsed_url = urllib.parse.urlparse(cover_url)
             cover_ext = os.path.splitext(parsed_url.path)[1] or '.jpg'
             
-            cover_filename = f"cover{cover_ext}"
+            cover_filename = f"{title}_cover{cover_ext}"
             cover_path = os.path.join(video_dir, cover_filename)
             
             if self.download_cover(cover_url, cover_path):

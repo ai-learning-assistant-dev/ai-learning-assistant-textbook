@@ -99,7 +99,7 @@ def save_app_config(config):
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
-def process_video_task(task_id, url, output_dir, model_name, cookies_file):
+def process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name=None):
     """处理单个视频的下载和总结任务"""
     try:
         # 检查停止标志
@@ -131,7 +131,8 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file):
             video_url=url,
             output_dir=output_dir,
             format_type='srt',
-            download_cover=True
+            download_cover=True,
+            custom_folder_name=custom_folder_name
         )
         
         # 获取下载结果
@@ -450,6 +451,7 @@ def create_tasks():
         output_dir = data.get('output_dir', 'subtitles')
         model_name = data.get('model_name')
         cookies_file = data.get('cookies_file', 'cookies.txt')
+        custom_folder_name = data.get('custom_folder_name', '').strip() or None
         
         if not urls:
             return jsonify({
@@ -472,13 +474,50 @@ def create_tasks():
         # 创建输出目录
         os.makedirs(output_dir, exist_ok=True)
         
-        # 创建任务
-        task_ids = []
+        # 加载Cookie用于检测收藏夹
+        config_cookies = load_cookies_from_file(cookies_file)
+        
+        # 处理URL列表，展开收藏夹URL
+        expanded_urls = []
         for url in urls:
             url = url.strip()
             if not url:
                 continue
             
+            # 检查是否为收藏夹URL
+            downloader = BilibiliSubtitleDownloader(
+                sessdata=config_cookies.get('sessdata'),
+                bili_jct=config_cookies.get('bili_jct'),
+                buvid3=config_cookies.get('buvid3'),
+                debug=False
+            )
+            
+            if downloader.is_favorite_url(url):
+                # 获取收藏夹ID
+                fid = downloader.extract_fid(url)
+                if fid:
+                    print(f"检测到收藏夹URL，正在获取视频列表...")
+                    # 获取收藏夹内的视频列表
+                    videos = downloader.get_favorite_videos(fid)
+                    for video in videos:
+                        video_url = f"https://www.bilibili.com/video/{video['bvid']}"
+                        expanded_urls.append(video_url)
+                    print(f"收藏夹展开完成，共 {len(videos)} 个视频")
+                else:
+                    print(f"无法从收藏夹URL中提取ID: {url}")
+            else:
+                # 普通视频URL
+                expanded_urls.append(url)
+        
+        if not expanded_urls:
+            return jsonify({
+                'success': False,
+                'error': '未找到有效的视频URL'
+            }), 400
+        
+        # 创建任务
+        task_ids = []
+        for url in expanded_urls:
             task_id = str(uuid.uuid4())
             
             with tasks_lock:
@@ -493,7 +532,7 @@ def create_tasks():
             # 启动后台线程处理任务
             thread = threading.Thread(
                 target=process_video_task,
-                args=(task_id, url, output_dir, model_name, cookies_file)
+                args=(task_id, url, output_dir, model_name, cookies_file, custom_folder_name)
             )
             thread.daemon = True
             thread.start()
@@ -502,7 +541,8 @@ def create_tasks():
         
         return jsonify({
             'success': True,
-            'task_ids': task_ids
+            'task_ids': task_ids,
+            'total_videos': len(expanded_urls)
         })
         
     except Exception as e:

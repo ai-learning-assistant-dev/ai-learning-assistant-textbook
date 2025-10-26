@@ -464,7 +464,7 @@
     <div class="container">
         <div class="header">
             <h1>Bilibili视频字幕下载与总结</h1>
-            <p>批量下载B站视频字幕，AI自动生成内容总结</p>
+            <p>批量下载B站视频字幕，AI自动生成内容总结 · 支持收藏夹批量处理</p>
         </div>
 
         <div class="main-content">
@@ -505,14 +505,32 @@
                         <textarea 
                             class="form-textarea" 
                             id="videoUrls" 
-                            placeholder="https://www.bilibili.com/video/BV1xx411c7mu&#10;https://www.bilibili.com/video/BV1yy411c8zY"
+                            placeholder="支持视频URL：&#10;https://www.bilibili.com/video/BV1xx411c7mu&#10;&#10;支持收藏夹URL：&#10;https://space.bilibili.com/UID/favlist?fid=收藏夹ID"
                             required
                         ></textarea>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            💡 提示：支持单个视频URL、多个视频URL和收藏夹URL混合输入，收藏夹会自动展开
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            自定义文件夹名称（可选）
+                        </label>
+                        <input 
+                            type="text" 
+                            class="form-input" 
+                            id="customFolderName" 
+                            placeholder="留空则使用视频标题作为文件夹名称"
+                        />
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            💡 提示：多个URL时，指定此选项可将所有视频文件放在同一个文件夹内
+                        </div>
                     </div>
 
                     <div class="flex">
                         <div class="form-group flex-1">
-                            <label class="form-label">输出文件夹</label>
+                            <label class="form-label">输出根目录</label>
                             <input 
                                 type="text" 
                                 class="form-input" 
@@ -904,6 +922,7 @@
             
             const outputDir = document.getElementById('outputDir').value;
             const modelName = document.getElementById('modelSelect').value;
+            const customFolderName = document.getElementById('customFolderName').value.trim();
             
             if (urls.length === 0) {
                 showAlert('taskAlert', '请输入至少一个视频URL', 'error');
@@ -922,14 +941,18 @@
                     body: JSON.stringify({
                         urls: urls,
                         output_dir: outputDir,
-                        model_name: modelName
+                        model_name: modelName,
+                        custom_folder_name: customFolderName
                     })
                 });
                 
                 const data = await response.json();
                 
                 if (data.success) {
-                    showAlert('taskAlert', `已创建 ${data.task_ids.length} 个任务`, 'success');
+                    const message = data.total_videos 
+                        ? `已创建 ${data.task_ids.length} 个任务，共 ${data.total_videos} 个视频`
+                        : `已创建 ${data.task_ids.length} 个任务`;
+                    showAlert('taskAlert', message, 'success');
                     document.getElementById('videoUrls').value = '';
                     
                     // 开始轮询任务状态
