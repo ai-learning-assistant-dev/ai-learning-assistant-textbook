@@ -39,6 +39,15 @@
 - 多个视频可放在同一文件夹内
 - 所有文件带视频标题前缀，避免冲突
 
+### ⚡ 并发控制 (v2.1)
+- **智能任务队列**：使用任务队列机制，避免API并发过高
+- **可配置并发数**：默认同时处理2个视频，可在Web界面调整（1-10）
+- **防止API限流**：
+  - 设置为 **1** - 串行处理，完全避免并发，适合有严格限流的API
+  - 设置为 **2-3** - 平衡效率与API限制，推荐大多数场景
+  - 设置为 **4+** - 高并发，需要API支持较高并发量
+- **自动保存配置**：并发数设置自动保存，重启后保持
+
 ## 快速开始
 
 ### 方式一：使用打包版本（需完成打包）
@@ -113,6 +122,9 @@ python download_and_summarize.py "收藏夹URL" -n 模型名称
 # 自定义输出文件夹⭐新增
 python download_and_summarize.py "URL" -f "Python学习合集" -n 模型名称
 
+# 下载所有分P视频⭐新增
+python download_and_summarize.py "视频URL" -n 模型名称 --download-all-parts
+
 # 使用流式输出
 python download_and_summarize.py "视频URL" -n 模型名称 --stream
 
@@ -162,7 +174,9 @@ subtitles/
     └── ...
 ```
 
-**🎯 多分P视频支持：**
+**🎯 多分P视频支持：**⭐优化
+- 默认只下载URL指定的视频（例如 ?p=2 只下载第2个分P）
+- 开启"下载所有分P"开关后，下载该视频的所有分P
 - 每个分P生成独立的字幕和AI处理文件
 - 文件名使用各自标题，不会覆盖
 - 视频信息文件只有一份
@@ -273,6 +287,49 @@ python download_and_summarize.py "URL" -f "我的学习资料" -n 模型名称
 3. **主题分类：**
    按项目、主题或课程创建不同文件夹
 
+### 📺 分P视频下载控制 (v2.1)
+
+新增分P视频下载开关，可精确控制下载内容。
+
+**功能说明：**
+
+- **开关关闭（默认）**：严格按照URL下载，一个URL只下载一个视频
+  - `https://bilibili.com/video/BV1xx` → 下载第1个分P
+  - `https://bilibili.com/video/BV1xx?p=3` → 只下载第3个分P
+  
+- **开关开启**：下载该视频的所有分P（保持原有行为）
+  - `https://bilibili.com/video/BV1xx?p=3` → 下载所有分P（第1、2、3...所有）
+
+**使用方法：**
+
+**网页端：**
+在任务配置区域勾选"下载所有分P视频"复选框
+
+**命令行：**
+```bash
+# 只下载URL指定的分P（默认）
+python download_and_summarize.py "https://bilibili.com/video/BV1xx?p=2" -n 模型
+
+# 下载所有分P
+python download_and_summarize.py "https://bilibili.com/video/BV1xx?p=2" -n 模型 --download-all-parts
+```
+
+**应用场景：**
+
+1. **精确下载特定章节：**
+   - 只想学习某个系列课程的第5节，URL添加 `?p=5`，开关关闭
+
+2. **下载完整系列：**
+   - 需要下载整个系列教程，开关开启
+
+3. **批量下载多个指定分P：**
+   ```
+   https://bilibili.com/video/BV1xx?p=1
+   https://bilibili.com/video/BV1xx?p=5
+   https://bilibili.com/video/BV1xx?p=10
+   ```
+   开关关闭，只下载第1、5、10这三个分P
+
 ## 配置文件
 
 ### config/app_config.json
@@ -282,7 +339,8 @@ python download_and_summarize.py "URL" -f "我的学习资料" -n 模型名称
   "last_selected_model": "模型名称",        // 上次选择的模型
   "cookies_file": "cookies.txt",           // Cookie文件路径
   "auto_refresh_interval": 2000,           // 刷新间隔(毫秒)
-  "web_port": 5000                         // Web服务端口
+  "web_port": 5000,                        // Web服务端口
+  "download_all_parts": false              // 是否下载所有分P（默认false）
 }
 ```
 
@@ -304,7 +362,7 @@ python download_and_summarize.py "URL" -f "我的学习资料" -n 模型名称
 ## 注意事项
 
 1. **Cookie必需**：下载AI字幕必须配置SESSDATA，有效期约30天
-2. **多P视频**：自动下载所有分P，每个分P生成独立文件
+2. **多P视频**：默认只下载URL指定的视频，可通过开关控制是否下载所有分P
 3. **无字幕视频**：会跳过，不创建文件
 4. **反爬虫**：已内置2秒延迟和重试机制，不要连续处理大量视频
 5. **收藏夹处理**：视频较多时耗时较长，建议使用 `--stream` 查看实时进度

@@ -528,6 +528,38 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input 
+                                type="checkbox" 
+                                id="downloadAllParts" 
+                                style="cursor: pointer; width: 18px; height: 18px;"
+                            />
+                            <span>下载所有分P视频</span>
+                        </label>
+                        <div style="font-size: 12px; color: #666; margin-top: 5px; margin-left: 28px;">
+                            💡 提示：关闭时（默认），只下载URL指定的那一个视频；开启时，下载该视频的所有分P
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            最大并发任务数
+                        </label>
+                        <input 
+                            type="number" 
+                            class="form-input" 
+                            id="maxConcurrentTasks" 
+                            min="1"
+                            max="10"
+                            value="2"
+                            placeholder="同时处理的视频数量"
+                        />
+                        <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                            💡 提示：同时处理的视频数量。设置为1可避免API并发限制，设置为2-3可提高效率（需要API支持）
+                        </div>
+                    </div>
+
                     <div class="flex">
                         <div class="form-group flex-1">
                             <label class="form-label">输出根目录</label>
@@ -669,6 +701,19 @@
                     saveAppConfig({ output_directory: path });
                 }
             });
+            
+            // 监听分P下载开关变化，自动保存
+            document.getElementById('downloadAllParts').addEventListener('change', function() {
+                saveAppConfig({ download_all_parts: this.checked });
+            });
+            
+            // 监听并发数变化，自动保存
+            document.getElementById('maxConcurrentTasks').addEventListener('change', function() {
+                const value = parseInt(this.value);
+                if (value >= 1 && value <= 10) {
+                    saveAppConfig({ max_concurrent_tasks: value });
+                }
+            });
         });
 
         // 加载应用配置
@@ -683,6 +728,16 @@
                     // 应用配置到界面
                     if (appConfig.output_directory) {
                         document.getElementById('outputDir').value = appConfig.output_directory;
+                    }
+                    
+                    // 恢复分P下载开关状态
+                    if (appConfig.download_all_parts !== undefined) {
+                        document.getElementById('downloadAllParts').checked = appConfig.download_all_parts;
+                    }
+                    
+                    // 恢复并发数配置
+                    if (appConfig.max_concurrent_tasks !== undefined) {
+                        document.getElementById('maxConcurrentTasks').value = appConfig.max_concurrent_tasks;
                     }
                 }
             } catch (error) {
@@ -923,6 +978,7 @@
             const outputDir = document.getElementById('outputDir').value;
             const modelName = document.getElementById('modelSelect').value;
             const customFolderName = document.getElementById('customFolderName').value.trim();
+            const downloadAllParts = document.getElementById('downloadAllParts').checked;
             
             if (urls.length === 0) {
                 showAlert('taskAlert', '请输入至少一个视频URL', 'error');
@@ -942,7 +998,8 @@
                         urls: urls,
                         output_dir: outputDir,
                         model_name: modelName,
-                        custom_folder_name: customFolderName
+                        custom_folder_name: customFolderName,
+                        download_all_parts: downloadAllParts
                     })
                 });
                 

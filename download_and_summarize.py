@@ -73,6 +73,8 @@ def main():
                        help='使用流式输出总结')
     parser.add_argument('--download-only', action='store_true',
                        help='只下载字幕，不进行总结')
+    parser.add_argument('--download-all-parts', action='store_true',
+                       help='下载所有分P视频（默认：只下载URL指定的视频）')
     parser.add_argument('--list-models', action='store_true',
                        help='列出所有可用的模型')
     parser.add_argument('--debug', action='store_true',
@@ -121,24 +123,26 @@ def main():
         print("-" * 80)
         fid = downloader.extract_fid(args.url)
         if not fid:
-            print("❌ 错误：无法从URL中提取收藏夹ID")
-            sys.exit(1)
-        
-        print(f"收藏夹ID: {fid}")
-        print("正在获取收藏夹视频列表...")
-        print()
-        
-        videos = downloader.get_favorite_videos(fid)
-        if not videos:
-            print("❌ 收藏夹为空或无法访问")
-            sys.exit(1)
-        
-        print(f"✅ 找到 {len(videos)} 个视频")
-        print()
-        
-        for video in videos:
-            video_url = f"https://www.bilibili.com/video/{video['bvid']}"
-            video_urls.append((video_url, video['title']))
+            print("⚠️  警告：无法从URL中提取收藏夹ID，将作为普通视频URL处理")
+            print("-" * 80)
+            # 当作普通视频URL处理
+            video_urls.append((args.url, None))
+        else:
+            print(f"收藏夹ID: {fid}")
+            print("正在获取收藏夹视频列表...")
+            print()
+            
+            videos = downloader.get_favorite_videos(fid)
+            if not videos:
+                print("❌ 收藏夹为空或无法访问")
+                sys.exit(1)
+            
+            print(f"✅ 找到 {len(videos)} 个视频")
+            print()
+            
+            for video in videos:
+                video_url = f"https://www.bilibili.com/video/{video['bvid']}"
+                video_urls.append((video_url, video['title']))
     else:
         # 普通视频URL
         video_urls.append((args.url, None))
@@ -173,7 +177,8 @@ def main():
                 output_dir=args.output,
                 format_type='srt',
                 download_cover=True,
-                custom_folder_name=args.folder_name
+                custom_folder_name=args.folder_name,
+                download_all_parts=args.download_all_parts
             )
             
             downloaded_files = download_result.get('subtitles', [])

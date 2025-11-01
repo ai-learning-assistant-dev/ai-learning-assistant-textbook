@@ -36,7 +36,11 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
 
     # 2. 获取原始标题，video_info.json相同路径下创建 Excel 文件
     original_title = sanitize_filename(video_info.get('title', 'Untitled Course'))
-    safe_excel_filename = json_file_path.replace('video_info.json', f'{original_title}.xlsx')
+    # 处理带前缀的video_info.json文件名（例如：标题_video_info.json）
+    safe_excel_filename = json_file_path.replace('_video_info.json', '.xlsx')
+    # 如果没有前缀（旧格式），则使用原来的逻辑
+    if safe_excel_filename == json_file_path:
+        safe_excel_filename = json_file_path.replace('video_info.json', f'{original_title}.xlsx')
 
     # 3. 复制并重命名模板 Excel 文件
     try:

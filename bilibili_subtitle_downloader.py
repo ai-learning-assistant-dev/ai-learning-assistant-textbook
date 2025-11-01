@@ -102,6 +102,24 @@ class BilibiliSubtitleDownloader:
             return match.group(0)
         return None
     
+    def extract_page_number(self, url: str) -> Optional[int]:
+        """
+        从URL中提取分P参数（p参数）
+        
+        Args:
+            url: Bilibili视频URL
+            
+        Returns:
+            分P编号（从1开始），如果没有p参数返回None
+        """
+        # 匹配p参数：?p=2 或 &p=2
+        pattern = r'[?&]p=(\d+)'
+        match = re.search(pattern, url)
+        
+        if match:
+            return int(match.group(1))
+        return None
+    
     def extract_fid(self, url: str) -> Optional[str]:
         """
         从收藏夹URL中提取收藏夹ID
@@ -131,7 +149,8 @@ class BilibiliSubtitleDownloader:
         Returns:
             是否为收藏夹URL
         """
-        return 'favlist' in url or 'fav' in url
+        # 更严格的判断：必须包含 favlist 且有 fid= 参数
+        return 'favlist' in url and 'fid=' in url
     
     def get_favorite_videos(self, fid: str, max_count: Optional[int] = None) -> List[Dict]:
         """
@@ -553,7 +572,8 @@ class BilibiliSubtitleDownloader:
     
     def download(self, video_url: str, output_dir: str = 'subtitles', 
                  format_type: str = 'srt', language: Optional[str] = 'ai-zh',
-                 download_cover: bool = True, custom_folder_name: Optional[str] = None) -> Dict[str, any]:
+                 download_cover: bool = True, custom_folder_name: Optional[str] = None,
+                 download_all_parts: bool = False) -> Dict[str, any]:
         """
         下载视频字幕和封面的主函数
         
@@ -564,6 +584,7 @@ class BilibiliSubtitleDownloader:
             language: 指定语言，None则下载所有语言
             download_cover: 是否下载封面图片（默认True）
             custom_folder_name: 自定义输出文件夹名称，None则使用视频标题
+            download_all_parts: 是否下载所有分P（默认False，只下载URL指定的视频）
             
         Returns:
             包含下载结果的字典：
@@ -630,6 +651,29 @@ class BilibiliSubtitleDownloader:
             if not pages:
                 print("错误: 未找到视频分P信息")
                 return result
+        
+        # 根据 download_all_parts 开关和URL参数决定下载哪些分P
+        if not download_all_parts:
+            # 如果开关关闭，只下载URL指定的那一个分P
+            target_page_number = self.extract_page_number(video_url)
+            if target_page_number is None:
+                # 如果URL没有p参数，默认下载第一个
+                target_page_number = 1
+            
+            if self.debug:
+                print(f"[DEBUG] download_all_parts=False，只下载第 {target_page_number} 个分P")
+            
+            # 检查目标分P是否存在
+            if target_page_number > len(pages):
+                print(f"错误: 请求的分P编号 p={target_page_number} 不存在（该视频共 {len(pages)} 个分P）")
+                return result
+            
+            # 只保留目标分P（pages索引从0开始，所以要减1）
+            pages = [pages[target_page_number - 1]]
+        else:
+            # 如果开关开启，下载所有分P（保持现有逻辑）
+            if self.debug:
+                print(f"[DEBUG] download_all_parts=True，下载所有 {len(pages)} 个分P")
         
         # 先检查是否有可用字幕（不创建文件夹）
         has_subtitle = False

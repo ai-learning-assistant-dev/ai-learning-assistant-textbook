@@ -8,9 +8,11 @@ import os
 import sys
 import json
 import uuid
+import time
 import threading
 from pathlib import Path
 from datetime import datetime
+from queue import Queue
 from flask import Flask, render_template, request, jsonify, send_from_directory
 from werkzeug.utils import secure_filename
 
@@ -26,6 +28,14 @@ app.config['JSON_AS_ASCII'] = False  # 支持中文JSON
 # 全局变量存储任务状态
 tasks = {}
 tasks_lock = threading.Lock()
+
+# 任务队列：用于限制并发数量
+task_queue = Queue()
+# 最大并发任务数（可以根据API限制调整）
+MAX_CONCURRENT_TASKS = 2  # 默认同时最多处理2个视频
+# 工作线程启动标志
+worker_threads_started = False
+worker_threads_lock = threading.Lock()
 
 
 class TaskStatus:
@@ -69,7 +79,9 @@ def load_app_config():
         'last_selected_model': '',
         'cookies_file': 'cookies.txt',
         'auto_refresh_interval': 2000,
-        'web_port': 5000
+        'web_port': 5000,
+        'download_all_parts': False,  # 默认关闭：只下载URL指定的视频，不下载所有分P
+        'max_concurrent_tasks': 2  # 最大并发任务数：默认同时处理2个视频（避免API并发过高）
     }
     
     if not os.path.exists(config_file):
@@ -99,7 +111,68 @@ def save_app_config(config):
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
-def process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name=None):
+def start_worker_threads():
+    """启动工作线程池（确保只启动一次）"""
+    global worker_threads_started
+    
+    with worker_threads_lock:
+        if worker_threads_started:
+            return
+        
+        # 加载配置获取并发数
+        config = load_app_config()
+        max_concurrent = config.get('max_concurrent_tasks', MAX_CONCURRENT_TASKS)
+        
+        print(f"🚀 正在启动 {max_concurrent} 个工作线程...")
+        for i in range(max_concurrent):
+            worker = threading.Thread(target=task_queue_worker, daemon=True, name=f"Worker-{i+1}")
+            worker.start()
+        
+        worker_threads_started = True
+        print(f"✅ 工作线程池已启动（{max_concurrent} 个线程）")
+
+
+def task_queue_worker():
+    """任务队列工作线程：从队列中取任务并执行"""
+    thread_name = threading.current_thread().name
+    print(f"[{thread_name}] 工作线程已启动，等待任务...")
+    
+    while True:
+        try:
+            # 从队列中获取任务
+            task_data = task_queue.get()
+            if task_data is None:  # None 是停止信号
+                print(f"[{thread_name}] 收到停止信号，退出")
+                break
+            
+            task_id = task_data['task_id']
+            url = task_data['url']
+            output_dir = task_data['output_dir']
+            model_name = task_data['model_name']
+            cookies_file = task_data['cookies_file']
+            custom_folder_name = task_data.get('custom_folder_name')
+            download_all_parts = task_data.get('download_all_parts', False)
+            
+            print(f"[{thread_name}] 开始处理任务 {task_id}: {url}")
+            
+            # 执行任务
+            process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts)
+            
+            print(f"[{thread_name}] 任务 {task_id} 处理完成")
+            
+            # 任务完成后等待一小段时间再处理下一个（避免触发反爬虫）
+            time.sleep(2)
+            
+        except Exception as e:
+            print(f"[{thread_name}] 任务队列工作线程错误: {e}")
+            import traceback
+            traceback.print_exc()
+        finally:
+            # 标记任务完成
+            task_queue.task_done()
+
+
+def process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False):
     """处理单个视频的下载和总结任务"""
     try:
         # 检查停止标志
@@ -132,7 +205,8 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file, custo
             output_dir=output_dir,
             format_type='srt',
             download_cover=True,
-            custom_folder_name=custom_folder_name
+            custom_folder_name=custom_folder_name,
+            download_all_parts=download_all_parts
         )
         
         # 获取下载结果
@@ -446,12 +520,16 @@ def delete_model(model_id):
 def create_tasks():
     """创建批量任务"""
     try:
+        # 确保工作线程已启动
+        start_worker_threads()
+        
         data = request.json
         urls = data.get('urls', [])
         output_dir = data.get('output_dir', 'subtitles')
         model_name = data.get('model_name')
         cookies_file = data.get('cookies_file', 'cookies.txt')
         custom_folder_name = data.get('custom_folder_name', '').strip() or None
+        download_all_parts = data.get('download_all_parts', False)
         
         if not urls:
             return jsonify({
@@ -504,7 +582,9 @@ def create_tasks():
                         expanded_urls.append(video_url)
                     print(f"收藏夹展开完成，共 {len(videos)} 个视频")
                 else:
-                    print(f"无法从收藏夹URL中提取ID: {url}")
+                    # 无法提取收藏夹ID，当作普通视频URL处理
+                    print(f"无法从收藏夹URL中提取ID，将作为普通视频处理: {url}")
+                    expanded_urls.append(url)
             else:
                 # 普通视频URL
                 expanded_urls.append(url)
@@ -515,9 +595,9 @@ def create_tasks():
                 'error': '未找到有效的视频URL'
             }), 400
         
-        # 创建任务
+        # 创建任务并加入队列
         task_ids = []
-        for url in expanded_urls:
+        for index, url in enumerate(expanded_urls):
             task_id = str(uuid.uuid4())
             
             with tasks_lock:
@@ -525,24 +605,33 @@ def create_tasks():
                     'id': task_id,
                     'url': url,
                     'status': TaskStatus.PENDING,
-                    'message': '等待处理',
+                    'message': '等待队列处理（避免并发过高）',
                     'created_at': datetime.now().isoformat()
                 }
             
-            # 启动后台线程处理任务
-            thread = threading.Thread(
-                target=process_video_task,
-                args=(task_id, url, output_dir, model_name, cookies_file, custom_folder_name)
-            )
-            thread.daemon = True
-            thread.start()
+            # 将任务放入队列，而不是直接启动线程
+            task_data = {
+                'task_id': task_id,
+                'url': url,
+                'output_dir': output_dir,
+                'model_name': model_name,
+                'cookies_file': cookies_file,
+                'custom_folder_name': custom_folder_name,
+                'download_all_parts': download_all_parts
+            }
+            task_queue.put(task_data)
             
             task_ids.append(task_id)
+        
+        # 获取当前配置的并发数
+        config = load_app_config()
+        max_concurrent = config.get('max_concurrent_tasks', MAX_CONCURRENT_TASKS)
         
         return jsonify({
             'success': True,
             'task_ids': task_ids,
-            'total_videos': len(expanded_urls)
+            'total_videos': len(expanded_urls),
+            'message': f'已创建 {len(task_ids)} 个任务，最多同时处理 {max_concurrent} 个视频'
         })
         
     except Exception as e:
@@ -673,6 +762,10 @@ def update_app_config():
             config['auto_refresh_interval'] = data['auto_refresh_interval']
         if 'web_port' in data:
             config['web_port'] = data['web_port']
+        if 'download_all_parts' in data:
+            config['download_all_parts'] = data['download_all_parts']
+        if 'max_concurrent_tasks' in data:
+            config['max_concurrent_tasks'] = data['max_concurrent_tasks']
         
         # 保存配置
         save_app_config(config)
@@ -694,9 +787,10 @@ if __name__ == '__main__':
     os.makedirs('subtitles', exist_ok=True)
     os.makedirs('templates', exist_ok=True)
     
-    # 加载配置获取端口
+    # 加载配置获取端口和并发数
     config = load_app_config()
     port = config.get('web_port', 5000)
+    max_concurrent = config.get('max_concurrent_tasks', MAX_CONCURRENT_TASKS)
     
     print("=" * 80)
     print("Bilibili视频字幕下载与总结 - Web服务")
@@ -704,10 +798,14 @@ if __name__ == '__main__':
     print()
     print("服务启动中...")
     print(f"访问地址: http://127.0.0.1:{port}")
+    print(f"最大并发任务数: {max_concurrent}")
+    print(f"工作线程将在首次创建任务时启动")
     print()
     print("按 Ctrl+C 停止服务")
     print("=" * 80)
     print()
     
-    app.run(host='0.0.0.0', port=port, debug=True, threaded=True)
+    # 使用 use_reloader=False 避免Flask重新加载导致工作线程丢失
+    # 使用 debug=False 在生产环境中，或者确保工作线程在每次重载后都能正确启动
+    app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False, threaded=True)
 
