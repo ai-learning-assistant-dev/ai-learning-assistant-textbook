@@ -249,7 +249,7 @@ def main():
             
             # 遍历所有下载的字幕文件，对每个都进行总结
             for index, subtitle_file in enumerate(downloaded_files, 1):
-            print()
+                print()
             print("=" * 80)
             if total_files > 1:
                 print(f"📄 正在处理第 {index}/{total_files} 个字幕文件")
@@ -257,63 +257,62 @@ def main():
             print("-" * 80)
             
             try:
-                    # 从字幕文件名中提取标题（去除扩展名和语言后缀）
-                    subtitle_filename = os.path.basename(subtitle_file)
-                    # 去除扩展名
-                    subtitle_name = os.path.splitext(subtitle_filename)[0]
-                    # 去除语言后缀（如 _ai-zh, _zh-CN 等）
-                    subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
+                # 从字幕文件名中提取标题（去除扩展名和语言后缀）
+                subtitle_filename = os.path.basename(subtitle_file)
+                # 去除扩展名
+                subtitle_name = os.path.splitext(subtitle_filename)[0]                    # 去除语言后缀（如 _ai-zh, _zh-CN 等）
+                subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
                     
-                    if args.debug:
-                        print(f"[DEBUG] 字幕标题: {subtitle_title}")
+                if args.debug:
+                    print(f"[DEBUG] 字幕标题: {subtitle_title}")
                     
-                    # 定义所有可能生成的文件路径
-                    summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
-                    markdown_dir = os.path.join(video_dir, 'markdown')
-                    full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
-                    exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
-                    questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
+                # 定义所有可能生成的文件路径
+                summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
+                markdown_dir = os.path.join(video_dir, 'markdown')
+                full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+                exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
+                questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
                     
-                    # 解析字幕（提前解析，供后续步骤使用）
-                    subtitles = None
-                    subtitle_text = None
-                    plain_text = None
-                    summarizer = SubtitleSummarizer(llm_client)
+                # 解析字幕（提前解析，供后续步骤使用）
+                subtitles = None
+                subtitle_text = None
+                plain_text = None
+                summarizer = SubtitleSummarizer(llm_client)
                     
-                    # ========== 1. 生成要点总结 ==========
-                    if os.path.exists(summary_json_file):
-                        print("📝 要点总结文件已存在，跳过")
-                        print(f"   JSON格式: {summary_json_file}")
-                    else:
-                        print("📝 正在生成要点总结...")
+                # ========== 1. 生成要点总结 ==========
+                if os.path.exists(summary_json_file):
+                    print("📝 要点总结文件已存在，跳过")
+                    print(f"   JSON格式: {summary_json_file}")
+                else:
+                    print("📝 正在生成要点总结...")
                         
-                        # 解析字幕
-                        if subtitles is None:
-                            subtitles = SRTParser.parse_srt_file(subtitle_file)
-                            print(f"解析到 {len(subtitles)} 条字幕")
-                            subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+                    # 解析字幕
+                    if subtitles is None:
+                        subtitles = SRTParser.parse_srt_file(subtitle_file)
+                        print(f"解析到 {len(subtitles)} 条字幕")
+                        subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
                         
-                        summary = summarizer.summarize(subtitle_text, stream=args.stream)
+                    summary = summarizer.summarize(subtitle_text, stream=args.stream)
                         
-                        with open(summary_json_file, 'w', encoding='utf-8') as f:
-                            json.dump(summary, f, ensure_ascii=False, indent=2)
+                    with open(summary_json_file, 'w', encoding='utf-8') as f:
+                        json.dump(summary, f, ensure_ascii=False, indent=2)
                         
-                        print()
-                        print("✅ 要点总结已保存：")
-                        print(f"   JSON格式: {summary_json_file}")
+                    print()
+                    print("✅ 要点总结已保存：")
+                    print(f"   JSON格式: {summary_json_file}")
                         
-                        # 显示要点总结（终端输出）
-                        print()
-                        print("=" * 80)
-                        print("📋 要点总结预览：")
-                        print("=" * 80)
-                        key_points = summary.get('key_points', [])
-                        print(f"\n🎯 关键要点（共 {len(key_points)} 个）：\n")
-                        for i, point in enumerate(key_points, 1):
-                            time = point.get('time', '')
-                            title = point.get('title', '')
-                            print(f"{i}. [{time}] {title}")
-                        print("=" * 80)
+                    # 显示要点总结（终端输出）
+                    print()
+                    print("=" * 80)
+                    print("📋 要点总结预览：")
+                    print("=" * 80)
+                    key_points = summary.get('key_points', [])
+                    print(f"\n🎯 关键要点（共 {len(key_points)} 个）：\n")
+                    for i, point in enumerate(key_points, 1):
+                        time = point.get('time', '')
+                        title = point.get('title', '')
+                        print(f"{i}. [{time}] {title}")
+                    print("=" * 80)
                 
                 # ========== 2. 生成完整内容文档 ==========
                 print()
@@ -422,14 +421,14 @@ def main():
                 
                     success_count += 1
                     
-                except Exception as e:
-                    print(f"❌ 处理此字幕文件时出错: {e}")
-                    if args.debug:
-                        import traceback
-                        traceback.print_exc()
-                    failed_count += 1
-                    # 继续处理下一个文件，而不是直接退出
-                    continue
+            except Exception as e:
+                print(f"❌ 处理此字幕文件时出错: {e}")
+                if args.debug:
+                    import traceback
+                    traceback.print_exc()
+                failed_count += 1
+                # 继续处理下一个文件，而不是直接退出
+                continue
             
             # 输出本视频处理统计
             print()

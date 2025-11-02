@@ -3,7 +3,11 @@ import shutil
 import openpyxl
 import math
 import re
+import os
+import threading
 
+# 确保这个锁在文件顶层被定义，它就是唯一的、共享的实例
+excel_file_lock = threading.Lock()
 
 def sanitize_filename(filename):
     """
@@ -13,6 +17,57 @@ def sanitize_filename(filename):
     # 将所有非法字符替换为下划线 '_'
     return re.sub(r'[\\/:*?"<>| ]', '_', filename)
 
+def process_video_to_excel_flash(json_file_path, template_excel_path, video_index):
+    """
+    批量处理时，将所有信息追加到以父目录命名的 Excel 文件中。
+    """
+    # 1. 读取并解析 JSON 文件
+    try:
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            video_info = json.load(f)
+        print(f"成功读取 JSON 文件: {json_file_path}")
+    except FileNotFoundError:
+        print(f"错误: JSON 文件未找到 '{json_file_path}'")
+        return
+    except json.JSONDecodeError:
+        print(f"错误: JSON 文件格式不正确 '{json_file_path}'")
+        return
+
+    # 获取父目录名作为 Excel 文件名
+    parent_dir = os.path.basename(os.path.dirname(json_file_path))
+    excel_filename = os.path.join(os.path.dirname(json_file_path), f"{sanitize_filename(parent_dir)}.xlsx")
+
+    # 如果 Excel 文件不存在，则复制模板
+    if not os.path.exists(excel_filename):
+        shutil.copy(template_excel_path, excel_filename)
+        print(f"模板文件已复制并重命名为: {excel_filename}")
+    # 打开 Excel 文件
+    try:
+        with excel_file_lock:
+            workbook = openpyxl.load_workbook(excel_filename)
+            sheet_chapters = workbook['chapters_sections'] if 'chapters_sections' in workbook.sheetnames else None
+            if not sheet_chapters:
+                print("警告: 未找到 'chapters_sections' 工作表。")
+                return
+
+            video_index_num = int(re.search(r'\d+', video_index).group())
+            current_row = video_index_num + 1
+
+            # 处理分P信息
+            bvid = video_info.get('bvid')
+            duration_sec = video_info.get('duration', 0)
+            duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
+            sheet_chapters.cell(row=current_row, column=1, value=current_row - 1)
+            sheet_chapters.cell(row=current_row, column=4, value=f"https://www.bilibili.com/video/{bvid}")
+            sheet_chapters.cell(row=current_row, column=5, value=sanitize_filename(video_info.get('title', '')))
+            sheet_chapters.cell(row=current_row, column=6, value=current_row - 1)
+            sheet_chapters.cell(row=current_row, column=7, value=duration_min)
+
+            workbook.save(excel_filename)
+            print(f"数据已追加并保存到文件: {excel_filename}")
+
+    except Exception as e:
+        print(f"处理 Excel 文件时发生错误: {e}")
 
 def process_video_to_excel_final(json_file_path, template_excel_path):
     """

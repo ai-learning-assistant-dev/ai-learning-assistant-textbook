@@ -276,7 +276,7 @@ class BilibiliSubtitleDownloader:
         
         return None
 
-    def save_video_info(self, video_info: Dict, output_path: str):
+    def save_video_info(self, video_info: Dict, video_index: str, output_path: str, download_all_parts: bool):
         """
         保存视频信息到JSON文件
 
@@ -288,7 +288,10 @@ class BilibiliSubtitleDownloader:
             json.dump(video_info, f, ensure_ascii=False, indent=2)
         tittle = video_info['title']
         # 处理视频信息并生成Excel文件,并命名为video_info中的tittle字段.xlsx
-        process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
+        if download_all_parts:
+            process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
+        else:
+            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index)
 
         if self.debug:
             print(f"[DEBUG] 视频信息已保存到: {output_path}")
@@ -570,7 +573,7 @@ class BilibiliSubtitleDownloader:
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
-    def download(self, video_url: str, output_dir: str = 'subtitles', 
+    def download(self, video_url: str, video_index: str, output_dir: str = 'subtitles',
                  format_type: str = 'srt', language: Optional[str] = 'ai-zh',
                  download_cover: bool = True, custom_folder_name: Optional[str] = None,
                  download_all_parts: bool = False) -> Dict[str, any]:
@@ -668,8 +671,8 @@ class BilibiliSubtitleDownloader:
                 print(f"错误: 请求的分P编号 p={target_page_number} 不存在（该视频共 {len(pages)} 个分P）")
                 return result
             
-            # 只保留目标分P（pages索引从0开始，所以要减1）
-            pages = [pages[target_page_number - 1]]
+            # 只保留目标视频
+            pages = [page for page in pages if page.get('cid') == video_info.get('cid')]
         else:
             # 如果开关开启，下载所有分P（保持现有逻辑）
             if self.debug:
@@ -699,7 +702,7 @@ class BilibiliSubtitleDownloader:
         # 保存视频信息到JSON文件（带视频标题前缀）
         video_info_filename = f"{title}_video_info.json"
         video_info_path = os.path.join(video_dir, video_info_filename)
-        self.save_video_info(video_info, video_info_path)
+        self.save_video_info(video_info, video_index, video_info_path, download_all_parts)
         
         # 下载封面图片（带视频标题前缀）
         if download_cover and cover_url:
@@ -721,7 +724,10 @@ class BilibiliSubtitleDownloader:
             # 优先使用剧集自己的 bvid，如果没有，则使用原始视频的 bvid
             main_bvid = page.get('bvid') or bvid
             cid = page['cid']
-            page_title = page.get('part', '第1P')
+            if download_all_parts:
+                page_title = page.get('part', '第1P')
+            else:
+                page_title = title
             
             if len(pages) > 1:
                 print(f"\n处理分P: {page_title} (cid: {cid})")

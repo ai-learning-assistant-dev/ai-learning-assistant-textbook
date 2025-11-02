@@ -156,7 +156,7 @@ def task_queue_worker():
             print(f"[{thread_name}] 开始处理任务 {task_id}: {url}")
             
             # 执行任务
-            process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts)
+            process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts)
             
             print(f"[{thread_name}] 任务 {task_id} 处理完成")
             
@@ -172,7 +172,7 @@ def task_queue_worker():
             task_queue.task_done()
 
 
-def process_video_task(task_id, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False):
+def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False):
     """处理单个视频的下载和总结任务"""
     try:
         # 检查停止标志
@@ -202,6 +202,7 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file, custo
         # 下载字幕和封面
         download_result = downloader.download(
             video_url=url,
+            video_index=thread_name,
             output_dir=output_dir,
             format_type='srt',
             download_cover=True,
@@ -392,8 +393,10 @@ def process_video_task(task_id, url, output_dir, model_name, cookies_file, custo
                 'exercises': exercises_file,
                 'questions': questions_file
             })
-
-        save_data_to_excel(f"{video_dir}/{sanitize_filename(video_title)}.xlsx")
+        if download_all_parts:
+            save_data_to_excel(f"{video_dir}/{sanitize_filename(video_title)}.xlsx")
+        else:
+            save_data_to_excel(f"{video_dir}/{os.path.basename(video_dir)}.xlsx")
         # 更新状态：完成
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.COMPLETED
