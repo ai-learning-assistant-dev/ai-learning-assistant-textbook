@@ -50,8 +50,15 @@ def process_video_to_excel_flash(json_file_path, template_excel_path, video_inde
                 print("警告: 未找到 'chapters_sections' 工作表。")
                 return
 
-            video_index_num = int(re.search(r'\d+', video_index).group())
-            current_row = video_index_num + 1
+            # 找到第一个空行（避免使用 video_index 作为行号，因为在多线程环境中
+            # video_index 可能是线程名如 'Worker-1'，仅包含少量不同数字，会导致重复写入相同行）
+            # 从第2行开始（假设第1行为表头）向下查找第一个空白的序号列
+            current_row = 2
+            while True:
+                cell_val = sheet_chapters.cell(row=current_row, column=1).value
+                if cell_val in (None, ''):
+                    break
+                current_row += 1
 
             # 处理分P信息
             bvid = video_info.get('bvid')
