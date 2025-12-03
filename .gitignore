@@ -42,7 +42,7 @@ env/
 cookies.txt
 config/llm_models.json
 config/app_config.json
-subtitles/*/
+subtitles/
 !subtitles/.gitkeep
 release/
 
