@@ -174,6 +174,7 @@ def main():
             
             download_result = downloader.download(
                 video_url=video_url,
+                video_index=str(video_index),
                 output_dir=args.output,
                 format_type='srt',
                 download_cover=True,

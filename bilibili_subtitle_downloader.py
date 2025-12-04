@@ -9,12 +9,17 @@ import requests
 import json
 import re
 import os
+import sys
 import time
 import random
 from typing import Optional, Dict, List
 import argparse
 from pathlib import Path
 import process_video_info
+try:
+    import video_transcriber
+except ImportError:
+    video_transcriber = None
 
 
 class BilibiliSubtitleDownloader:
@@ -573,7 +578,7 @@ class BilibiliSubtitleDownloader:
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
-    def download(self, video_url: str, video_index: str, output_dir: str = 'subtitles',
+    def download(self, video_url: str, video_index: str = "1", output_dir: str = 'subtitles',
                  format_type: str = 'srt', language: Optional[str] = 'ai-zh',
                  download_cover: bool = True, custom_folder_name: Optional[str] = None,
                  download_all_parts: bool = False) -> Dict[str, any]:
@@ -678,7 +683,7 @@ class BilibiliSubtitleDownloader:
             if self.debug:
                 print(f"[DEBUG] download_all_parts=True，下载所有 {len(pages)} 个分P")
         
-        # 先检查是否有可用字幕（不创建文件夹）
+        # 先检查是否有可用字幕
         has_subtitle = False
         for page in pages:
             cid = page['cid']
@@ -687,9 +692,13 @@ class BilibiliSubtitleDownloader:
                 has_subtitle = True
                 break
         
+        use_asr = False
         if not has_subtitle:
-            print("错误: 此视频没有字幕")
-            return result
+            print("提示: 此视频没有官方/AI字幕，将尝试使用本地ASR模型转录...")
+            if video_transcriber is None:
+                print("错误: 无法加载 video_transcriber 模块，请检查依赖安装")
+                return result
+            use_asr = True
         
         # 确认有字幕后，才创建输出目录和下载封面
         # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
@@ -737,6 +746,75 @@ class BilibiliSubtitleDownloader:
             
             if not subtitles:
                 print(f"此视频{'分P' if len(pages) > 1 else ''}没有字幕")
+                
+                if use_asr and video_transcriber:
+                    print("尝试使用本地ASR转录...")
+                    
+                    # 构建视频URL
+                    if page.get('bvid') and page.get('bvid') != bvid:
+                        # 合集/列表中的独立视频
+                        target_url = f"https://www.bilibili.com/video/{page.get('bvid')}"
+                    else:
+                        # 多P视频
+                        page_num = page.get('page', 1)
+                        target_url = f"https://www.bilibili.com/video/{bvid}?p={page_num}"
+                    
+                    # 构建输出路径
+                    audio_filename = f"{process_video_info.sanitize_filename(page_title)}_audio.mp3"
+                    audio_path = os.path.join(video_dir, audio_filename)
+                    
+                    srt_filename = f"{process_video_info.sanitize_filename(page_title)}_ai-zh.srt"
+                    srt_path = os.path.join(video_dir, srt_filename)
+                    
+                    # 下载音频
+                    if video_transcriber.download_audio(target_url, audio_path):
+
+                        print("正在生成...")
+                        sys.stdout.flush()
+                        # 转录
+                        # 使用subprocess调用转录脚本，以隔离可能的底层Crash（特别是Windows+CUDA环境下）
+                        import subprocess
+                        # 注意：sys已经在文件头部导入，此处不要重复导入，否则会导致UnboundLocalError
+                        
+                        print(f"启动独立进程进行转录 (Model: small)...")
+                        sys.stdout.flush()
+                        
+                        # 获取当前Python解释器路径
+                        python_executable = sys.executable
+                        video_transcriber_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "video_transcriber.py")
+                        
+                        cmd = [
+                            python_executable,
+                            video_transcriber_script,
+                            audio_path,
+                            srt_path,
+                            "--model_size", "small"
+                        ]
+                        
+                        try:
+                            # 运行子进程
+                            # 注意：即使子进程Crash（返回非0），只要SRT文件生成了，我们也视为成功
+                            result_proc = subprocess.run(cmd, check=False)
+                            
+                            if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                                print(f"成功生成 {srt_filename}")
+                                sys.stdout.flush()
+                                
+                                result['subtitles'].append(srt_path)
+                                if os.path.exists(audio_path):
+                                    try:
+                                        os.remove(audio_path)
+                                    except Exception as e:
+                                        print(f"警告: 无法删除临时音频文件: {e}")
+                            else:
+                                print("转录失败：未生成SRT文件或文件为空")
+                                if result_proc.returncode != 0:
+                                    print(f"转录进程异常退出，返回码: {result_proc.returncode}")
+                        except Exception as e:
+                            print(f"调用转录进程失败: {e}")
+                    else:
+                        print("音频下载失败")
+                
                 continue
             
             print(f"找到 {len(subtitles)} 个字幕:")
