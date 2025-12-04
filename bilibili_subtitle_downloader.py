@@ -677,7 +677,31 @@ class BilibiliSubtitleDownloader:
                 return result
             
             # 只保留目标视频
-            pages = [page for page in pages if page.get('cid') == video_info.get('cid')]
+            # 注意：这里必须通过 cid 来精确匹配，因为 pages 列表中的顺序可能和 p 参数一致，也可能不一致（对于 ugc_season）
+            # 如果是普通多P，pages[i] 对应 p=i+1
+            # 如果是合集，需要更复杂的匹配
+            
+            target_page = None
+            
+            # 尝试1：如果是普通多P，直接用索引
+            if target_page_number <= len(pages):
+                potential_page = pages[target_page_number - 1]
+                # 简单的校验：对于普通视频，page字段通常就是分P序号
+                if potential_page.get('page') == target_page_number:
+                    target_page = potential_page
+            
+            # 尝试2：如果上面没匹配到（比如合集，或者索引不对），遍历查找
+            if not target_page:
+                for page in pages:
+                    if page.get('page') == target_page_number:
+                        target_page = page
+                        break
+            
+            if target_page:
+                 pages = [target_page]
+            else:
+                 # 兜底：如果实在找不到对应 page 字段的，就按索引取（虽然前面已经判断过越界）
+                 pages = [pages[target_page_number - 1]]
         else:
             # 如果开关开启，下载所有分P（保持现有逻辑）
             if self.debug:
@@ -733,11 +757,46 @@ class BilibiliSubtitleDownloader:
             # 优先使用剧集自己的 bvid，如果没有，则使用原始视频的 bvid
             main_bvid = page.get('bvid') or bvid
             cid = page['cid']
-            if download_all_parts:
-                page_title = page.get('part', '第1P')
+            
+            # 始终尝试构建分P标题，即使用户只下载其中一个分P
+            # 如果不这样做，当 download_all_parts=False 时，文件名就不会包含 Px 前缀
+            # 这会导致用户困惑（不知道下载的是哪一集），且可能导致文件覆盖
+            
+            # 1. 确定当前分P的序号 (page_num)
+            # 优先使用 API 返回的 page 字段，如果没有则默认为 1
+            page_num = page.get('page', 1)
+            
+            # 2. 构建新标题
+            part_title = page.get('part', '').strip()
+            
+            # 逻辑：
+            # 如果总页数 > 1，肯定要加前缀
+            # 如果总页数 == 1，但 page_num > 1 (说明这是某个多P视频的其中一集，只是我们只下载了这一集)，也要加前缀
+            # 只有当它是真正的单P视频 (total=1, num=1) 时才不加
+            
+            # 注意：这里的 len(pages) 是指经过过滤后待下载的 pages 数量
+            # 我们需要知道视频原始的总分P数，但这在当前上下文不方便获取
+            # 不过，只要 page_num > 1，或者 part_title 和主标题不同，我们就认为它值得加前缀
+            
+            should_add_prefix = False
+            if len(pages) > 1:
+                should_add_prefix = True
+            elif page_num > 1:
+                should_add_prefix = True
+            elif part_title and part_title != title:
+                should_add_prefix = True
+            
+            if should_add_prefix:
+                if not part_title or part_title == title:
+                    page_title = f"{title}_P{page_num}"
+                else:
+                    page_title = f"{title}_P{page_num}.{part_title}"
             else:
                 page_title = title
             
+            # 再次清理文件名，确保安全
+            page_title = process_video_info.sanitize_filename(page_title)
+
             if len(pages) > 1:
                 print(f"\n处理分P: {page_title} (cid: {cid})")
             
@@ -756,14 +815,20 @@ class BilibiliSubtitleDownloader:
                         target_url = f"https://www.bilibili.com/video/{page.get('bvid')}"
                     else:
                         # 多P视频
+                        # 必须明确指定 p 参数，否则 yt-dlp 默认下载第一P
+                        # 注意：page.get('page') 是 B站 API 返回的分P序号，通常从1开始
                         page_num = page.get('page', 1)
                         target_url = f"https://www.bilibili.com/video/{bvid}?p={page_num}"
                     
                     # 构建输出路径
-                    audio_filename = f"{process_video_info.sanitize_filename(page_title)}_audio.mp3"
+                    # 使用带有分P信息的 page_title 加上随机后缀来命名，彻底避免并发冲突
+                    # 临时音频文件不需要保持可读性，只要保证唯一性即可
+                    import uuid
+                    random_suffix = str(uuid.uuid4())[:8]
+                    audio_filename = f"{page_title}_audio_{random_suffix}.mp3"
                     audio_path = os.path.join(video_dir, audio_filename)
                     
-                    srt_filename = f"{process_video_info.sanitize_filename(page_title)}_ai-zh.srt"
+                    srt_filename = f"{page_title}_ai-zh.srt"
                     srt_path = os.path.join(video_dir, srt_filename)
                     
                     # 下载音频
@@ -844,7 +909,8 @@ class BilibiliSubtitleDownloader:
                     continue
                 
                 # 构建输出文件名
-                filename = f"{process_video_info.sanitize_filename(page_title)}_{lan}.{format_type}"
+                # 使用统一的 page_title 变量（已经包含了 Px 序号），无需再次 sanitize，因为它已经是安全文件名
+                filename = f"{page_title}_{lan}.{format_type}"
                 
                 output_path = os.path.join(video_dir, filename)
                 

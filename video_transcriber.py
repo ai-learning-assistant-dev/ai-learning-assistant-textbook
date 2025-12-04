@@ -61,6 +61,7 @@ def download_audio(video_url, output_path):
     # 配置yt-dlp
     # 使用bestaudio/best确保下载最佳音质
     # 转换为mp3以确保兼容性
+    # 强制覆盖已存在的文件，防止并发下载时因为文件已存在而跳过处理导致后续逻辑错误
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': str(Path(output_path).with_suffix('')), # yt-dlp会自动添加后缀
@@ -70,7 +71,10 @@ def download_audio(video_url, output_path):
             'preferredquality': '192',
         }],
         'quiet': False,
-        'no_warnings': True,
+        'no_warnings': False,  # 开启警告以便调试
+        'overwrites': True,    # 强制覆盖
+        'force_overwrites': True, # 双重保险（部分版本可能使用这个）
+        'playlist_items': '1', # 强制只下载列表中的第一项（防止对于某些URL，yt-dlp尝试下载整个列表）
         # B站特定配置，防止403
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
