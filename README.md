@@ -1,6 +1,6 @@
 # Bilibili 视频字幕下载与教程编写
 
-一个功能强大的Python工具，用于下载Bilibili视频字幕（包括AI字幕），并调用大模型生成教程内容。
+一个功能强大的Python工具，用于下载Bilibili视频字幕（包括AI字幕和本地ASR识别），并调用大模型生成教程内容。
 
 **提供两种使用方式：**
 - 🌐 **Web界面**（推荐）- 简单易用的网页操作界面，支持所有功能
@@ -8,6 +8,7 @@
 
 **✨ Web界面已全面更新！** 现在完全支持所有新增功能，包括：
 - ✅ 下载字幕和封面
+- ✅ 智能字幕获取：优先在线获取，无资源时尝试本地字幕文件，最后使用Whisper进行本地ASR转录
 - ✅ 生成要点总结 (summary.json)
 - ✅ 生成完整内容文档 (content.md)
 - ✅ 生成练习题 (exercises.json)
@@ -19,8 +20,11 @@
 - [ ] 通过url获取视频信息
   - [x] b站ai字幕/标题
   - [x] b站视频封面
-  - [ ] 无ai字幕视频
-  - [ ] 其他视频源
+  - [x] 无ai字幕视频自动本地ASR识别
+  - [ ] 其他视频源(如抖音等)
+- [] 可视化的知识点信息查看与修改
+- [] LLM 提示词管理
+- [x] 一键部署整合包
 - [x] 知识要点总结
 - [x] 知识完整内容（Markdown格式）
 - [x] 预设问题（3个引导性问题）
@@ -28,6 +32,24 @@
 
 
 ## ✨ 新功能亮点
+
+### 🎙️ 智能字幕处理 (v2.2)
+1. **多级回退策略**：
+   - **Level 1**: 优先下载B站在线字幕（CC字幕或AI字幕）
+   - **Level 2**: 在线无资源时，自动扫描本地是否存在同名SRT文件（如 `视频标题.srt`）
+   - **Level 3**: 若上述均无，自动调用本地 Whisper 模型进行语音转录 (ASR)
+2. **多P支持**：完美支持分P视频的独立命名与处理，文件不再混淆。
+
+### 📊 Excel数据合并工具
+提供 `merge_excel_files.py` 脚本，用于将人工校对的Excel与程序生成的Excel进行智能合并：
+- **智能匹配**：通过视频URL（自动忽略多余参数）精准匹配
+- **数据保留**：保留人工编辑的章节结构、排序等信息
+- **自动填充**：自动回填程序生成的预设问题、机械标题，并规范化URL
+
+**使用示例：**
+```bash
+python merge_excel_files.py "人工Excel.xlsx" "程序Excel.xlsx" -o "合并后.xlsx"
+```
 
 ### 🗂️ 收藏夹批量下载 (v2.0)
 - 支持直接输入B站收藏夹URL，自动获取并处理收藏夹内所有视频
@@ -63,7 +85,11 @@
 #### 1. 安装依赖
 
 ```bash
+# 安装基础依赖
 pip install -r requirements.txt
+
+# 如需使用本地ASR功能，请安装GPU版本依赖（推荐）
+pip install -r requirements-gpu.txt
 ```
 
 #### 2. 配置Cookie
@@ -133,6 +159,9 @@ python download_and_summarize.py --list-models
 
 # 只下载字幕
 python bilibili_subtitle_downloader.py "视频URL"
+
+# 合并Excel文件
+python merge_excel_files.py "人工Excel路径" "程序Excel路径" -o "输出路径"
 ```
 
 ## 输出文件
@@ -141,45 +170,24 @@ python bilibili_subtitle_downloader.py "视频URL"
 
 ```
 subtitles/
-└── 视频标题/                                    # 文件夹（可自定义）
-    ├── 视频标题_video_info.json                # 视频信息⭐
-    ├── 视频标题_cover.jpg                       # 视频封面⭐
-    ├── 视频标题.xlsx                            # Excel格式视频信息
-    ├── 字幕标题_ai-zh.srt                       # 字幕文件（SRT格式）
-    ├── 字幕标题_summary.json                    # 要点总结（JSON格式）
-    ├── 字幕标题_exercises.json                  # 练习题（JSON格式）
-    ├── 字幕标题_questions.json                  # 预设问题（JSON格式）
-    └── markdown/                                # Markdown文件目录
-        └── 字幕标题.md                          # 完整内容（Markdown格式）
+└── [自定义文件夹名]/                       # 例如 "Python课程"
+    ├── [自定义文件夹名].xlsx               # 汇总Excel文件（便于人工查看）
+    └── data/                               # 数据存放目录
+        ├── 视频标题_video_info.json        # 视频信息
+        ├── 视频标题_cover.jpg              # 视频封面
+        ├── 视频标题.srt                    # 字幕文件（SRT格式）
+        ├── 视频标题.md                     # 完整教程文档（Markdown格式）
+        ├── 视频标题_summary.json           # 要点总结
+        ├── 视频标题_exercises.json         # 练习题
+        └── 视频标题_questions.json         # 预设问题
 ```
 
-⭐ **文件命名优化**：`video_info.json` 和 `cover` 现在都带视频标题前缀，方便多视频在同一文件夹时区分
-
-### 自定义输出示例
-
-**单个视频（默认）：**
-```
-subtitles/视频标题/  # 使用视频标题作为文件夹名
-```
-
-**多个视频（自定义文件夹）：**
-```
-subtitles/
-└── Python学习合集/               # 自定义文件夹名称
-    ├── 视频1_video_info.json
-    ├── 视频1_cover.jpg
-    ├── 视频1_ai-zh.srt
-    ├── 视频2_video_info.json
-    ├── 视频2_cover.jpg
-    └── ...
-```
-
-**🎯 多分P视频支持：**⭐优化
-- 默认只下载URL指定的视频（例如 ?p=2 只下载第2个分P）
-- 开启"下载所有分P"开关后，下载该视频的所有分P
-- 每个分P生成独立的字幕和AI处理文件
-- 文件名使用各自标题，不会覆盖
-- 视频信息文件只有一份
+### 文件结构说明
+- **Excel文件**：位于自定义文件夹根目录，方便直接打开查看和编辑。
+- **data目录**：存放所有程序生成的中间文件和结果文件，保持根目录整洁。
+- **分P处理**：
+  - 若分P有子标题：文件名为 `子标题.srt`
+  - 若分P无子标题：文件名为 `主标题_P序号.srt`
 
 ### 要点总结示例 (summary.json)
 
@@ -202,7 +210,7 @@ subtitles/
 
 ### 生成内容说明
 
-#### 完整内容文档 (markdown/*.md)
+#### 完整内容文档 (*.md)
 - 详细的学习内容，Markdown格式
 - 自动去除时间标签，智能分段
 - 包含概念解释、方法步骤、应用案例
@@ -214,7 +222,7 @@ subtitles/
 - 适合学习前预习、观看时思考、学后反思
 
 #### 练习题 (exercises.json)
-- 5道选择题 + 5道简答题
+- 9道选择题 + 1道简答题
 - 覆盖视频主要知识点，难度适中
 - 包含详细答案和解析
 - 适合自我检测、复习巩固
@@ -406,7 +414,33 @@ A: 目前不支持筛选，建议创建新收藏夹只添加需要的视频。
 A: 所有文件都带视频标题前缀，不会冲突。留空文件夹名称则每个视频独立文件夹。
 
 **Q: 如何打包成exe？**  
-A: Windows运行 `build.bat`，打包结果在 `release` 目录。
+A: 
+- **普通版**：运行 `build.bat`，结果在 `release` 目录。
+- **GPU加速版（推荐）**：运行 `powershell -ExecutionPolicy Bypass -File build_package.ps1`，结果在 `release_v2.0_gpu` 目录。
+
+## 🛠️ 构建指南 (GPU版)
+
+本项目提供了一键构建脚本，自动配置带有 CUDA 加速的独立运行环境，适合分发给 N 卡用户。
+
+**构建步骤：**
+
+1. 确保系统已安装 PowerShell（Windows默认自带）。
+2. 在项目根目录打开终端，运行以下命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build_package.ps1
+```
+
+**脚本自动执行流程：**
+1. **环境准备**：自动检测并安装高性能包管理器 `uv`（使用清华源加速）。
+2. **虚拟环境**：创建干净独立的虚拟环境 (`.venv`)。
+3. **依赖安装**：
+   - 自动配置 `requirements-gpu.txt` 中的依赖。
+   - 专门安装 **PyTorch (CUDA 12.1)** 版本，确保 GPU 加速可用。
+4. **打包程序**：使用 PyInstaller 打包为独立 EXE，并处理 NVIDIA 动态库路径问题。
+5. **输出结果**：生成完整的整合包到 `release_v2.0_gpu` 目录，解压即用。
+
+> **注意**：构建过程需要下载约 3-4GB 的依赖包（主要是 PyTorch CUDA 版），请保持网络畅通。
 
 ## 许可证
 

@@ -225,7 +225,7 @@ class SubtitleSummarizer:
 2. 每个段落提取一个大要点，涵盖该时间段的主要内容
 3. 时间节点格式简化为 "MM:SS"（如 "00:07", "04:28"），取该段落开始时间
 4. 标题要精炼概括该段落的核心主题（10-20字）
-5. 描述要详细全面（100-300字），包含该段落的所有重要信息点、细节和逻辑关系
+5. 描述要详细全面（50-150字），包含该段落的所有重要信息点、细节和逻辑关系
 6. 按时间顺序排列
 7. **不要**输出 video_summary 字段
 8. 输出格式严格按照以下JSON格式：
@@ -357,6 +357,25 @@ class SubtitleSummarizer:
             "raw_response": response_text
         }
     
+    def _clean_markdown_response(self, text: str) -> str:
+        """
+        清理Markdown响应，去除可能的代码块标记
+        
+        Args:
+            text: 原始响应文本
+            
+        Returns:
+            清理后的文本
+        """
+        text = text.strip()
+        # 匹配包裹整个内容的 markdown 代码块
+        # 使用 DOTALL 模式匹配跨行内容
+        # 匹配以 ``` 或 ```markdown 开头，以 ``` 结尾的内容
+        match = re.match(r'^```(?:markdown)?\s*\n?(.*)\n?\s*```$', text, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return text
+
     def create_full_content_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """
         创建完整内容生成的提示词（教学导向）
@@ -512,12 +531,12 @@ class SubtitleSummarizer:
                 print(chunk, end='', flush=True)
                 full_response += chunk
             print("\n")
-            return full_response
+            return self._clean_markdown_response(full_response)
         else:
             print("正在生成完整内容...\n")
             response = self.llm_client.chat_completions(messages)
             content = response['choices'][0]['message']['content']
-            return content
+            return self._clean_markdown_response(content)
     
     def create_exercises_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """
@@ -535,8 +554,7 @@ class SubtitleSummarizer:
         prompt = f"""{title_part}请根据以下视频学习内容，设计一套练习题，用于帮助学习者检验和巩固所学知识。
 
 ## 题目要求
-
-### 📝 选择题（5道）
+### 📝 选择题（9道）
 - **覆盖核心知识点**：每道题对应一个重要概念或知识点
 - **难度适中**：既要考查理解，也要有一定区分度
 - **选项设计**：
@@ -546,7 +564,7 @@ class SubtitleSummarizer:
   - 避免明显错误或无关选项
 - **答案解析**：说明为什么正确，其他选项错在哪里
 
-### ✍️ 简答题（5道）
+### ✍️ 简答题（1道）
 - **深度考查**：要求学习者用自己的语言阐述理解
 - **题型多样**：
   - 概念解释（是什么）
@@ -562,6 +580,8 @@ class SubtitleSummarizer:
 ## 输出格式
 
 严格按照以下JSON格式输出：
+
+**重要：请确保`multiple_choice`数组中包含9个元素，`short_answer`数组中包含1个元素，总共10道题。**
 
 ```json
 {{

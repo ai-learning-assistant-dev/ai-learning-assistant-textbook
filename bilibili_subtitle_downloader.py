@@ -9,12 +9,17 @@ import requests
 import json
 import re
 import os
+import sys
 import time
 import random
 from typing import Optional, Dict, List
 import argparse
 from pathlib import Path
 import process_video_info
+try:
+    import video_transcriber
+except ImportError:
+    video_transcriber = None
 
 
 class BilibiliSubtitleDownloader:
@@ -276,13 +281,16 @@ class BilibiliSubtitleDownloader:
         
         return None
 
-    def save_video_info(self, video_info: Dict, video_index: str, output_path: str, download_all_parts: bool):
+    def save_video_info(self, video_info: Dict, video_index: str, output_path: str, download_all_parts: bool, part_title: Optional[str] = None, page_num: Optional[int] = None):
         """
         保存视频信息到JSON文件
 
         Args:
             video_info: 视频信息字典
             output_path: 输出文件路径
+            download_all_parts: 是否下载所有分P
+            part_title: 分P标题（可选）
+            page_num: 分P序号（可选）
         """
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(video_info, f, ensure_ascii=False, indent=2)
@@ -291,7 +299,7 @@ class BilibiliSubtitleDownloader:
         if download_all_parts:
             process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
         else:
-            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index)
+            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index, part_title=part_title, page_num=page_num)
 
         if self.debug:
             print(f"[DEBUG] 视频信息已保存到: {output_path}")
@@ -573,7 +581,7 @@ class BilibiliSubtitleDownloader:
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
-    def download(self, video_url: str, video_index: str, output_dir: str = 'subtitles',
+    def download(self, video_url: str, video_index: str = "1", output_dir: str = 'subtitles',
                  format_type: str = 'srt', language: Optional[str] = 'ai-zh',
                  download_cover: bool = True, custom_folder_name: Optional[str] = None,
                  download_all_parts: bool = False) -> Dict[str, any]:
@@ -672,13 +680,37 @@ class BilibiliSubtitleDownloader:
                 return result
             
             # 只保留目标视频
-            pages = [page for page in pages if page.get('cid') == video_info.get('cid')]
+            # 注意：这里必须通过 cid 来精确匹配，因为 pages 列表中的顺序可能和 p 参数一致，也可能不一致（对于 ugc_season）
+            # 如果是普通多P，pages[i] 对应 p=i+1
+            # 如果是合集，需要更复杂的匹配
+            
+            target_page = None
+            
+            # 尝试1：如果是普通多P，直接用索引
+            if target_page_number <= len(pages):
+                potential_page = pages[target_page_number - 1]
+                # 简单的校验：对于普通视频，page字段通常就是分P序号
+                if potential_page.get('page') == target_page_number:
+                    target_page = potential_page
+            
+            # 尝试2：如果上面没匹配到（比如合集，或者索引不对），遍历查找
+            if not target_page:
+                for page in pages:
+                    if page.get('page') == target_page_number:
+                        target_page = page
+                        break
+            
+            if target_page:
+                 pages = [target_page]
+            else:
+                 # 兜底：如果实在找不到对应 page 字段的，就按索引取（虽然前面已经判断过越界）
+                 pages = [pages[target_page_number - 1]]
         else:
             # 如果开关开启，下载所有分P（保持现有逻辑）
             if self.debug:
                 print(f"[DEBUG] download_all_parts=True，下载所有 {len(pages)} 个分P")
         
-        # 先检查是否有可用字幕（不创建文件夹）
+        # 先检查是否有可用字幕
         has_subtitle = False
         for page in pages:
             cid = page['cid']
@@ -687,22 +719,40 @@ class BilibiliSubtitleDownloader:
                 has_subtitle = True
                 break
         
+        use_asr = False
         if not has_subtitle:
-            print("错误: 此视频没有字幕")
-            return result
+            print("提示: 此视频没有官方/AI字幕，将尝试使用本地ASR模型转录...")
+            if video_transcriber is None:
+                print("错误: 无法加载 video_transcriber 模块，请检查依赖安装")
+                return result
+            use_asr = True
         
         # 确认有字幕后，才创建输出目录和下载封面
         # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
         folder_name = custom_folder_name if custom_folder_name else title
-        video_dir = os.path.join(output_dir, folder_name)
+        root_dir = os.path.join(output_dir, folder_name)
+        # 将所有视频数据文件放在 data 子目录下
+        video_dir = os.path.join(root_dir, 'data')
+        
+        os.makedirs(root_dir, exist_ok=True)
         os.makedirs(video_dir, exist_ok=True)
+        
         result['video_dir'] = video_dir
         print(f"输出目录: {video_dir}")
         
+        # Determine the part title and page number to use for Excel
+        excel_part_title = None
+        excel_page_num = None
+        if not download_all_parts and pages:
+             # Since pages is filtered to contain only the target page (if found)
+             # We can use the first page's part title and page number
+             excel_part_title = pages[0].get('part')
+             excel_page_num = pages[0].get('page')
+
         # 保存视频信息到JSON文件（带视频标题前缀）
         video_info_filename = f"{title}_video_info.json"
         video_info_path = os.path.join(video_dir, video_info_filename)
-        self.save_video_info(video_info, video_index, video_info_path, download_all_parts)
+        self.save_video_info(video_info, video_index, video_info_path, download_all_parts, part_title=excel_part_title, page_num=excel_page_num)
         
         # 下载封面图片（带视频标题前缀）
         if download_cover and cover_url:
@@ -724,11 +774,34 @@ class BilibiliSubtitleDownloader:
             # 优先使用剧集自己的 bvid，如果没有，则使用原始视频的 bvid
             main_bvid = page.get('bvid') or bvid
             cid = page['cid']
-            if download_all_parts:
-                page_title = page.get('part', '第1P')
-            else:
-                page_title = title
             
+            # 始终尝试构建分P标题，即使用户只下载其中一个分P
+            # 如果不这样做，当 download_all_parts=False 时，文件名就不会包含 Px 前缀
+            # 这会导致用户困惑（不知道下载的是哪一集），且可能导致文件覆盖
+            
+            # 1. 确定当前分P的序号 (page_num)
+            # 优先使用 API 返回的 page 字段，如果没有则默认为 1
+            page_num = page.get('page', 1)
+            
+            # 2. 构建新标题
+            part_title = page.get('part', '').strip()
+            
+            # 逻辑修改：用户请求直接使用分P子标题作为文件名，不加主标题前缀
+            # 如果有子标题，直接使用子标题
+            # 如果没有子标题，且是多P，则使用 主标题_P序号
+            # 如果没有子标题，且是单P，则使用 主标题
+            
+            if part_title:
+                page_title = part_title
+            else:
+                if len(pages) > 1 or page_num > 1:
+                    page_title = f"{title}_P{page_num}"
+                else:
+                    page_title = title
+            
+            # 再次清理文件名，确保安全
+            page_title = process_video_info.sanitize_filename(page_title)
+
             if len(pages) > 1:
                 print(f"\n处理分P: {page_title} (cid: {cid})")
             
@@ -736,7 +809,104 @@ class BilibiliSubtitleDownloader:
             subtitles = self.get_subtitle_info(main_bvid, cid)
             
             if not subtitles:
-                print(f"此视频{'分P' if len(pages) > 1 else ''}没有字幕")
+                print(f"此视频{'分P' if len(pages) > 1 else ''}没有在线字幕")
+                
+                # 检查本地是否存在字幕文件
+                # 优先检查标准命名格式
+                check_filenames = [
+                    f"{page_title}_ai-zh.srt",
+                    f"{page_title}.srt",
+                    f"{page_title}_zh-CN.srt",
+                    f"{page_title}_zh.srt"
+                ]
+                
+                local_subtitle_found = False
+                for filename in check_filenames:
+                    local_path = os.path.join(video_dir, filename)
+                    if os.path.exists(local_path):
+                        print(f"✅ 发现本地已存在字幕文件: {filename}")
+                        print("将在后续步骤中使用此本地文件。")
+                        result['subtitles'].append(local_path)
+                        local_subtitle_found = True
+                        break
+                
+                if local_subtitle_found:
+                    continue
+
+                if use_asr and video_transcriber:
+                    print("尝试使用本地ASR转录...")
+                    
+                    # 构建视频URL
+                    if page.get('bvid') and page.get('bvid') != bvid:
+                        # 合集/列表中的独立视频
+                        target_url = f"https://www.bilibili.com/video/{page.get('bvid')}"
+                    else:
+                        # 多P视频
+                        # 必须明确指定 p 参数，否则 yt-dlp 默认下载第一P
+                        # 注意：page.get('page') 是 B站 API 返回的分P序号，通常从1开始
+                        page_num = page.get('page', 1)
+                        target_url = f"https://www.bilibili.com/video/{bvid}?p={page_num}"
+                    
+                    # 构建输出路径
+                    # 使用带有分P信息的 page_title 加上随机后缀来命名，彻底避免并发冲突
+                    # 临时音频文件不需要保持可读性，只要保证唯一性即可
+                    import uuid
+                    random_suffix = str(uuid.uuid4())[:8]
+                    audio_filename = f"{page_title}_audio_{random_suffix}.mp3"
+                    audio_path = os.path.join(video_dir, audio_filename)
+                    
+                    srt_filename = f"{page_title}_ai-zh.srt"
+                    srt_path = os.path.join(video_dir, srt_filename)
+                    
+                    # 下载音频
+                    if video_transcriber.download_audio(target_url, audio_path):
+
+                        print("正在生成...")
+                        sys.stdout.flush()
+                        # 转录
+                        # 使用subprocess调用转录脚本，以隔离可能的底层Crash（特别是Windows+CUDA环境下）
+                        import subprocess
+                        # 注意：sys已经在文件头部导入，此处不要重复导入，否则会导致UnboundLocalError
+                        
+                        print(f"启动独立进程进行转录 (Model: small)...")
+                        sys.stdout.flush()
+                        
+                        # 获取当前Python解释器路径
+                        python_executable = sys.executable
+                        video_transcriber_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "video_transcriber.py")
+                        
+                        cmd = [
+                            python_executable,
+                            video_transcriber_script,
+                            audio_path,
+                            srt_path,
+                            "--model_size", "small"
+                        ]
+                        
+                        try:
+                            # 运行子进程
+                            # 注意：即使子进程Crash（返回非0），只要SRT文件生成了，我们也视为成功
+                            result_proc = subprocess.run(cmd, check=False)
+                            
+                            if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
+                                print(f"成功生成 {srt_filename}")
+                                sys.stdout.flush()
+                                
+                                result['subtitles'].append(srt_path)
+                                if os.path.exists(audio_path):
+                                    try:
+                                        os.remove(audio_path)
+                                    except Exception as e:
+                                        print(f"警告: 无法删除临时音频文件: {e}")
+                            else:
+                                print("转录失败：未生成SRT文件或文件为空")
+                                if result_proc.returncode != 0:
+                                    print(f"转录进程异常退出，返回码: {result_proc.returncode}")
+                        except Exception as e:
+                            print(f"调用转录进程失败: {e}")
+                    else:
+                        print("音频下载失败")
+                
                 continue
             
             print(f"找到 {len(subtitles)} 个字幕:")
@@ -766,7 +936,8 @@ class BilibiliSubtitleDownloader:
                     continue
                 
                 # 构建输出文件名
-                filename = f"{process_video_info.sanitize_filename(page_title)}_{lan}.{format_type}"
+                # 使用统一的 page_title 变量（已经包含了 Px 序号），无需再次 sanitize，因为它已经是安全文件名
+                filename = f"{page_title}_{lan}.{format_type}"
                 
                 output_path = os.path.join(video_dir, filename)
                 

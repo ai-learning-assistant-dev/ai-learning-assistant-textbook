@@ -5,6 +5,7 @@ __pycache__/
 *.so
 .Python
 build/
+models/
 develop-eggs/
 dist/
 downloads/
@@ -19,6 +20,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+release_v2.0_gpu/
 
 # PyInstaller
 *.manifest
@@ -42,7 +44,7 @@ env/
 cookies.txt
 config/llm_models.json
 config/app_config.json
-subtitles/*/
+subtitles/
 !subtitles/.gitkeep
 release/
 

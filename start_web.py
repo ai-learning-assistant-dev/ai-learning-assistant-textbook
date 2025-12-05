@@ -10,19 +10,11 @@ import sys
 def check_dependencies():
     """检查依赖"""
     try:
-        import flask
-        import requests
-    except ImportError as e:
-        print("=" * 80)
-        print("❌ 缺少必要的依赖包")
-        print("=" * 80)
-        print()
-        print(f"错误: {e}")
-        print()
-        print("请先安装依赖:")
-        print("  pip install -r requirements.txt")
-        print()
-        sys.exit(1)
+        from flask import Flask, render_template, request, jsonify
+    except ImportError:
+        print("\n错误: No module named 'flask'\n")
+        print("请先安装依赖:\n  pip install -r requirements.txt\n")
+        exit(1)
 
 
 def check_config():

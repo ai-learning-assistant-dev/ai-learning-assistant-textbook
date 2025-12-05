@@ -129,6 +129,18 @@ def fill_exercises_sheet(ws_ex, section_title, exercises, start_serial):
 
     return serial  # 返回写完后的下一个可用序号
 
+def find_matching_file(directory, suffix):
+    """
+    在指定目录中查找以 suffix 结尾的文件
+    """
+    if not os.path.exists(directory):
+        return None
+    
+    for filename in os.listdir(directory):
+        if filename.endswith(suffix):
+            return os.path.join(directory, filename)
+    return None
+
 def save_data_to_excel(excel_filename):
     relative_directory = os.path.dirname(excel_filename)
     wb = load_workbook(excel_filename)
@@ -150,8 +162,20 @@ def save_data_to_excel(excel_filename):
         if not section_title:
             continue
 
+        # 尝试直接查找
         q_fn = f"{relative_directory}/{section_title}_questions.json"
         ex_fn = f"{relative_directory}/{section_title}_exercises.json"
+        
+        # 如果直接查找失败，尝试通过后缀查找（处理分P文件名带前缀的情况）
+        if not os.path.exists(q_fn):
+            found_q = find_matching_file(relative_directory, f"{section_title}_questions.json")
+            if found_q:
+                q_fn = found_q
+                
+        if not os.path.exists(ex_fn):
+            found_ex = find_matching_file(relative_directory, f"{section_title}_exercises.json")
+            if found_ex:
+                ex_fn = found_ex
 
         # 填 questions 部分
         if os.path.exists(q_fn):
