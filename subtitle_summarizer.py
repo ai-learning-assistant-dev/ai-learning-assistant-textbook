@@ -357,6 +357,25 @@ class SubtitleSummarizer:
             "raw_response": response_text
         }
     
+    def _clean_markdown_response(self, text: str) -> str:
+        """
+        清理Markdown响应，去除可能的代码块标记
+        
+        Args:
+            text: 原始响应文本
+            
+        Returns:
+            清理后的文本
+        """
+        text = text.strip()
+        # 匹配包裹整个内容的 markdown 代码块
+        # 使用 DOTALL 模式匹配跨行内容
+        # 匹配以 ``` 或 ```markdown 开头，以 ``` 结尾的内容
+        match = re.match(r'^```(?:markdown)?\s*\n?(.*)\n?\s*```$', text, re.DOTALL | re.IGNORECASE)
+        if match:
+            return match.group(1).strip()
+        return text
+
     def create_full_content_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """
         创建完整内容生成的提示词（教学导向）
@@ -512,12 +531,12 @@ class SubtitleSummarizer:
                 print(chunk, end='', flush=True)
                 full_response += chunk
             print("\n")
-            return full_response
+            return self._clean_markdown_response(full_response)
         else:
             print("正在生成完整内容...\n")
             response = self.llm_client.chat_completions(messages)
             content = response['choices'][0]['message']['content']
-            return content
+            return self._clean_markdown_response(content)
     
     def create_exercises_prompt(self, subtitle_text: str, video_title: str = "") -> str:
         """

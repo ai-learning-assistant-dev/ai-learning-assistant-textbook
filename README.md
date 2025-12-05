@@ -408,7 +408,33 @@ A: 目前不支持筛选，建议创建新收藏夹只添加需要的视频。
 A: 所有文件都带视频标题前缀，不会冲突。留空文件夹名称则每个视频独立文件夹。
 
 **Q: 如何打包成exe？**  
-A: Windows运行 `build.bat`，打包结果在 `release` 目录。
+A: 
+- **普通版**：运行 `build.bat`，结果在 `release` 目录。
+- **GPU加速版（推荐）**：运行 `powershell -ExecutionPolicy Bypass -File build_package.ps1`，结果在 `release_v2.0_gpu` 目录。
+
+## 🛠️ 构建指南 (GPU版)
+
+本项目提供了一键构建脚本，自动配置带有 CUDA 加速的独立运行环境，适合分发给 N 卡用户。
+
+**构建步骤：**
+
+1. 确保系统已安装 PowerShell（Windows默认自带）。
+2. 在项目根目录打开终端，运行以下命令：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File build_package.ps1
+```
+
+**脚本自动执行流程：**
+1. **环境准备**：自动检测并安装高性能包管理器 `uv`（使用清华源加速）。
+2. **虚拟环境**：创建干净独立的虚拟环境 (`.venv`)。
+3. **依赖安装**：
+   - 自动配置 `requirements-gpu.txt` 中的依赖。
+   - 专门安装 **PyTorch (CUDA 12.1)** 版本，确保 GPU 加速可用。
+4. **打包程序**：使用 PyInstaller 打包为独立 EXE，并处理 NVIDIA 动态库路径问题。
+5. **输出结果**：生成完整的整合包到 `release_v2.0_gpu` 目录，解压即用。
+
+> **注意**：构建过程需要下载约 3-4GB 的依赖包（主要是 PyTorch CUDA 版），请保持网络畅通。
 
 ## 许可证
 

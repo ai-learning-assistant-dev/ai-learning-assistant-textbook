@@ -17,9 +17,15 @@ def sanitize_filename(filename):
     # 将所有非法字符替换为下划线 '_'
     return re.sub(r'[\\/:*?"<>| ]', '_', filename)
 
-def process_video_to_excel_flash(json_file_path, template_excel_path, video_index):
+def process_video_to_excel_flash(json_file_path, template_excel_path, video_index, part_title=None, page_num=None):
     """
     批量处理时，将所有信息追加到以父目录命名的 Excel 文件中。
+    Args:
+        json_file_path: json文件路径
+        template_excel_path: 模板excel路径
+        video_index: 视频索引（虽然函数内似乎没用到这个参数作为行号，而是查找空行）
+        part_title: 分P标题（可选），如果提供则使用此标题代替主标题
+        page_num: 分P序号（可选），如果提供且大于1，则拼接到URL后面
     """
     # 1. 读取并解析 JSON 文件
     try:
@@ -64,9 +70,18 @@ def process_video_to_excel_flash(json_file_path, template_excel_path, video_inde
             bvid = video_info.get('bvid')
             duration_sec = video_info.get('duration', 0)
             duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
+            
+            # 确定使用的标题：如果提供了分P标题则使用，否则使用视频主标题
+            title_to_use = part_title if part_title else video_info.get('title', '')
+            
+            # 构建URL
+            video_url = f"https://www.bilibili.com/video/{bvid}"
+            if page_num and int(page_num) > 1:
+                video_url += f"/?p={page_num}"
+            
             sheet_chapters.cell(row=current_row, column=1, value=current_row - 1)
-            sheet_chapters.cell(row=current_row, column=4, value=f"https://www.bilibili.com/video/{bvid}")
-            sheet_chapters.cell(row=current_row, column=5, value=sanitize_filename(video_info.get('title', '')))
+            sheet_chapters.cell(row=current_row, column=4, value=video_url)
+            sheet_chapters.cell(row=current_row, column=5, value=sanitize_filename(title_to_use))
             sheet_chapters.cell(row=current_row, column=6, value=current_row - 1)
             sheet_chapters.cell(row=current_row, column=7, value=duration_min)
 

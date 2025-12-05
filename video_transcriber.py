@@ -15,6 +15,23 @@ from modelscope.hub.snapshot_download import snapshot_download
 # 添加NVIDIA库路径到环境变量
 def add_nvidia_paths():
     """添加NVIDIA CUDA/cuDNN库路径到PATH环境变量"""
+    # 如果是PyInstaller打包环境
+    if getattr(sys, 'frozen', False):
+        base_dir = sys._MEIPASS
+        nvidia_paths = [
+            os.path.join(base_dir, 'nvidia', 'cublas', 'bin'),
+            os.path.join(base_dir, 'nvidia', 'cudnn', 'bin'),
+        ]
+        for path in nvidia_paths:
+            if os.path.exists(path):
+                try:
+                    os.add_dll_directory(path)
+                    os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
+                    print(f"已添加NVIDIA库路径(Frozen): {path}")
+                except Exception as e:
+                    print(f"添加路径失败: {e}")
+        return
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
     venv_dir = os.path.join(base_dir, '.venv')
     

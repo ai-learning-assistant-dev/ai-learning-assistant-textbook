@@ -20,6 +20,7 @@ wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+release_v2.0_gpu/
 
 # PyInstaller
 *.manifest

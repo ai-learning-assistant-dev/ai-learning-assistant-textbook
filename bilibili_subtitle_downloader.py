@@ -281,13 +281,16 @@ class BilibiliSubtitleDownloader:
         
         return None
 
-    def save_video_info(self, video_info: Dict, video_index: str, output_path: str, download_all_parts: bool):
+    def save_video_info(self, video_info: Dict, video_index: str, output_path: str, download_all_parts: bool, part_title: Optional[str] = None, page_num: Optional[int] = None):
         """
         保存视频信息到JSON文件
 
         Args:
             video_info: 视频信息字典
             output_path: 输出文件路径
+            download_all_parts: 是否下载所有分P
+            part_title: 分P标题（可选）
+            page_num: 分P序号（可选）
         """
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(video_info, f, ensure_ascii=False, indent=2)
@@ -296,7 +299,7 @@ class BilibiliSubtitleDownloader:
         if download_all_parts:
             process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
         else:
-            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index)
+            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index, part_title=part_title, page_num=page_num)
 
         if self.debug:
             print(f"[DEBUG] 视频信息已保存到: {output_path}")
@@ -732,10 +735,19 @@ class BilibiliSubtitleDownloader:
         result['video_dir'] = video_dir
         print(f"输出目录: {video_dir}")
         
+        # Determine the part title and page number to use for Excel
+        excel_part_title = None
+        excel_page_num = None
+        if not download_all_parts and pages:
+             # Since pages is filtered to contain only the target page (if found)
+             # We can use the first page's part title and page number
+             excel_part_title = pages[0].get('part')
+             excel_page_num = pages[0].get('page')
+
         # 保存视频信息到JSON文件（带视频标题前缀）
         video_info_filename = f"{title}_video_info.json"
         video_info_path = os.path.join(video_dir, video_info_filename)
-        self.save_video_info(video_info, video_index, video_info_path, download_all_parts)
+        self.save_video_info(video_info, video_index, video_info_path, download_all_parts, part_title=excel_part_title, page_num=excel_page_num)
         
         # 下载封面图片（带视频标题前缀）
         if download_cover and cover_url:
@@ -804,8 +816,30 @@ class BilibiliSubtitleDownloader:
             subtitles = self.get_subtitle_info(main_bvid, cid)
             
             if not subtitles:
-                print(f"此视频{'分P' if len(pages) > 1 else ''}没有字幕")
+                print(f"此视频{'分P' if len(pages) > 1 else ''}没有在线字幕")
                 
+                # 检查本地是否存在字幕文件
+                # 优先检查标准命名格式
+                check_filenames = [
+                    f"{page_title}_ai-zh.srt",
+                    f"{page_title}.srt",
+                    f"{page_title}_zh-CN.srt",
+                    f"{page_title}_zh.srt"
+                ]
+                
+                local_subtitle_found = False
+                for filename in check_filenames:
+                    local_path = os.path.join(video_dir, filename)
+                    if os.path.exists(local_path):
+                        print(f"✅ 发现本地已存在字幕文件: {filename}")
+                        print("将在后续步骤中使用此本地文件。")
+                        result['subtitles'].append(local_path)
+                        local_subtitle_found = True
+                        break
+                
+                if local_subtitle_found:
+                    continue
+
                 if use_asr and video_transcriber:
                     print("尝试使用本地ASR转录...")
                     
