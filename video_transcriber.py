@@ -18,18 +18,37 @@ def add_nvidia_paths():
     # 如果是PyInstaller打包环境
     if getattr(sys, 'frozen', False):
         base_dir = sys._MEIPASS
-        nvidia_paths = [
+        
+        # 尝试多种可能的路径结构
+        possible_paths = [
             os.path.join(base_dir, 'nvidia', 'cublas', 'bin'),
             os.path.join(base_dir, 'nvidia', 'cudnn', 'bin'),
+            os.path.join(base_dir, 'nvidia', 'cublas_cu12', 'bin'), # 某些版本的包名不同
+            os.path.join(base_dir, 'nvidia', 'cudnn_cu12', 'bin'),
+            os.path.join(base_dir, 'bin'), # 可能被放在根目录bin下
+            base_dir, # 可能直接在根目录
         ]
-        for path in nvidia_paths:
+        
+        # 递归搜索cublas64_*.dll所在的目录
+        found_paths = set()
+        for root, dirs, files in os.walk(base_dir):
+            for file in files:
+                if file.startswith("cublas64_") and file.endswith(".dll"):
+                    found_paths.add(root)
+                if file.startswith("cudnn64_") and file.endswith(".dll"):
+                    found_paths.add(root)
+                    
+        # 合并路径
+        all_paths = list(found_paths) + possible_paths
+        
+        for path in all_paths:
             if os.path.exists(path):
                 try:
                     os.add_dll_directory(path)
                     os.environ['PATH'] = path + os.pathsep + os.environ['PATH']
                     print(f"已添加NVIDIA库路径(Frozen): {path}")
                 except Exception as e:
-                    print(f"添加路径失败: {e}")
+                    pass # 忽略错误，继续尝试
         return
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -129,8 +148,14 @@ def get_model_path(model_size="small", models_dir="models"):
     Returns:
         str: 模型路径
     """
-    # 绝对路径
-    base_dir = os.path.dirname(os.path.abspath(__file__))
+    # 确定基础目录
+    if getattr(sys, 'frozen', False):
+        # 如果是打包后的环境，模型应该保存在EXE所在目录的models文件夹中
+        # 而不是临时解压目录 _MEIPASS
+        base_dir = os.path.dirname(sys.executable)
+    else:
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        
     models_dir = os.path.join(base_dir, models_dir)
     os.makedirs(models_dir, exist_ok=True)
     

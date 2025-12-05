@@ -22,7 +22,15 @@ from process_video_info import sanitize_filename
 from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
 
-app = Flask(__name__)
+# 确定模板目录
+if getattr(sys, 'frozen', False):
+    # 如果是PyInstaller打包环境
+    template_folder = os.path.join(sys._MEIPASS, 'templates')
+    static_folder = os.path.join(sys._MEIPASS, 'static')
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+else:
+    app = Flask(__name__)
+
 app.config['JSON_AS_ASCII'] = False  # 支持中文JSON
 
 # 全局变量存储任务状态
