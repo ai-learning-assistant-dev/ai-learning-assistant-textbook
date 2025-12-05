@@ -40,8 +40,17 @@ def process_video_to_excel_flash(json_file_path, template_excel_path, video_inde
         return
 
     # 获取父目录名作为 Excel 文件名
-    parent_dir = os.path.basename(os.path.dirname(json_file_path))
-    excel_filename = os.path.join(os.path.dirname(json_file_path), f"{sanitize_filename(parent_dir)}.xlsx")
+    json_dir = os.path.dirname(json_file_path)
+    dir_name = os.path.basename(json_dir)
+    
+    if dir_name == 'data':
+        # 如果在 data 文件夹内，将 Excel 放在上一级目录
+        parent_dir_path = os.path.dirname(json_dir)
+        parent_dir_name = os.path.basename(parent_dir_path)
+        excel_filename = os.path.join(parent_dir_path, f"{sanitize_filename(parent_dir_name)}.xlsx")
+    else:
+        # 原始逻辑
+        excel_filename = os.path.join(json_dir, f"{sanitize_filename(dir_name)}.xlsx")
 
     # 如果 Excel 文件不存在，则复制模板
     if not os.path.exists(excel_filename):
@@ -113,11 +122,21 @@ def process_video_to_excel_final(json_file_path, template_excel_path):
 
     # 2. 获取原始标题，video_info.json相同路径下创建 Excel 文件
     original_title = sanitize_filename(video_info.get('title', 'Untitled Course'))
-    # 处理带前缀的video_info.json文件名（例如：标题_video_info.json）
-    safe_excel_filename = json_file_path.replace('_video_info.json', '.xlsx')
-    # 如果没有前缀（旧格式），则使用原来的逻辑
-    if safe_excel_filename == json_file_path:
-        safe_excel_filename = json_file_path.replace('video_info.json', f'{original_title}.xlsx')
+    
+    # 确定 Excel 文件路径
+    json_dir = os.path.dirname(json_file_path)
+    dir_name = os.path.basename(json_dir)
+    
+    if dir_name == 'data':
+        # 如果在 data 文件夹内，将 Excel 放在上一级目录，并使用上一级目录名作为文件名
+        parent_dir_path = os.path.dirname(json_dir)
+        parent_dir_name = os.path.basename(parent_dir_path)
+        safe_excel_filename = os.path.join(parent_dir_path, f"{sanitize_filename(parent_dir_name)}.xlsx")
+    else:
+        # 原始逻辑：在同级目录下生成
+        safe_excel_filename = json_file_path.replace('_video_info.json', '.xlsx')
+        if safe_excel_filename == json_file_path:
+            safe_excel_filename = json_file_path.replace('video_info.json', f'{original_title}.xlsx')
 
     # 3. 复制并重命名模板 Excel 文件
     try:

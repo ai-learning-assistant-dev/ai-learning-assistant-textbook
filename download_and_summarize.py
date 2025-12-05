@@ -269,8 +269,8 @@ def main():
                     
                 # 定义所有可能生成的文件路径
                 summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
-                markdown_dir = os.path.join(video_dir, 'markdown')
-                full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+                # markdown文件不再单独存放，直接放在video_dir（即data目录）下
+                full_content_file = os.path.join(video_dir, f'{subtitle_title}.md')
                 exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
                 questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
                     
@@ -339,9 +339,6 @@ def main():
                         video_title=video_title,
                         stream=args.stream
                     )
-                    
-                    # 创建markdown子目录（如果不存在）
-                    os.makedirs(markdown_dir, exist_ok=True)
                     
                     with open(full_content_file, 'w', encoding='utf-8') as f:
                         f.write(full_content)

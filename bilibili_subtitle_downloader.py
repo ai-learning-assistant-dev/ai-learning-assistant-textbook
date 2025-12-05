@@ -730,8 +730,13 @@ class BilibiliSubtitleDownloader:
         # 确认有字幕后，才创建输出目录和下载封面
         # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
         folder_name = custom_folder_name if custom_folder_name else title
-        video_dir = os.path.join(output_dir, folder_name)
+        root_dir = os.path.join(output_dir, folder_name)
+        # 将所有视频数据文件放在 data 子目录下
+        video_dir = os.path.join(root_dir, 'data')
+        
+        os.makedirs(root_dir, exist_ok=True)
         os.makedirs(video_dir, exist_ok=True)
+        
         result['video_dir'] = video_dir
         print(f"输出目录: {video_dir}")
         
@@ -781,30 +786,18 @@ class BilibiliSubtitleDownloader:
             # 2. 构建新标题
             part_title = page.get('part', '').strip()
             
-            # 逻辑：
-            # 如果总页数 > 1，肯定要加前缀
-            # 如果总页数 == 1，但 page_num > 1 (说明这是某个多P视频的其中一集，只是我们只下载了这一集)，也要加前缀
-            # 只有当它是真正的单P视频 (total=1, num=1) 时才不加
+            # 逻辑修改：用户请求直接使用分P子标题作为文件名，不加主标题前缀
+            # 如果有子标题，直接使用子标题
+            # 如果没有子标题，且是多P，则使用 主标题_P序号
+            # 如果没有子标题，且是单P，则使用 主标题
             
-            # 注意：这里的 len(pages) 是指经过过滤后待下载的 pages 数量
-            # 我们需要知道视频原始的总分P数，但这在当前上下文不方便获取
-            # 不过，只要 page_num > 1，或者 part_title 和主标题不同，我们就认为它值得加前缀
-            
-            should_add_prefix = False
-            if len(pages) > 1:
-                should_add_prefix = True
-            elif page_num > 1:
-                should_add_prefix = True
-            elif part_title and part_title != title:
-                should_add_prefix = True
-            
-            if should_add_prefix:
-                if not part_title or part_title == title:
+            if part_title:
+                page_title = part_title
+            else:
+                if len(pages) > 1 or page_num > 1:
                     page_title = f"{title}_P{page_num}"
                 else:
-                    page_title = f"{title}_P{page_num}.{part_title}"
-            else:
-                page_title = title
+                    page_title = title
             
             # 再次清理文件名，确保安全
             page_title = process_video_info.sanitize_filename(page_title)
