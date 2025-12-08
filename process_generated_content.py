@@ -2,6 +2,8 @@ import os
 import json
 from openpyxl import load_workbook
 import argparse
+# 引入共享锁，确保多线程写入安全
+from process_video_info import excel_file_lock
 
 def load_json(filepath):
     with open(filepath, 'r', encoding='utf-8') as f:
@@ -142,59 +144,81 @@ def find_matching_file(directory, suffix):
     return None
 
 def save_data_to_excel(excel_filename):
-    relative_directory = os.path.dirname(excel_filename)
-    wb = load_workbook(excel_filename)
-    ws_cs = wb["chapters_sections"]
-    ws_ex = wb["exercises"]
-    ws_ex.delete_rows(2, ws_ex.max_row - 1)  # 清空 exercises 表中除表头外的所有行
-    # 先处理 chapters_sections sheet，把预设问题填进去
-    header_cs = {cell.value: cell.column for cell in ws_cs[1]}
-    if "节标题" not in header_cs:
-        raise ValueError("在 chapters_sections 表中找不到 “节标题” 列")
-    title_col_idx = header_cs["节标题"]
+    with excel_file_lock:
+        relative_directory = os.path.dirname(excel_filename)
+        wb = load_workbook(excel_filename)
+        ws_cs = wb["chapters_sections"]
+        ws_ex = wb["exercises"]
+        ws_ex.delete_rows(2, ws_ex.max_row - 1)  # 清空 exercises 表中除表头外的所有行
+        # 先处理 chapters_sections sheet，把预设问题填进去
+        header_cs = {cell.value: cell.column for cell in ws_cs[1]}
+        if "节标题" not in header_cs:
+            raise ValueError("在 chapters_sections 表中找不到 “节标题” 列")
+        title_col_idx = header_cs["节标题"]
 
-    # 为 exercises 表准备一个全局序号计数器，从 1 开始
-    next_serial = 1
+        # 为 exercises 表准备一个全局序号计数器，从 1 开始
+        next_serial = 1
 
-    for row in ws_cs.iter_rows(min_row=2):
-        cell = row[title_col_idx - 1]
-        section_title = cell.value
-        if not section_title:
-            continue
+        for row in ws_cs.iter_rows(min_row=2):
+            cell = row[title_col_idx - 1]
+            section_title = cell.value
+            if not section_title:
+                continue
 
-        # 尝试直接查找
-        q_fn = f"{relative_directory}/{section_title}_questions.json"
-        ex_fn = f"{relative_directory}/{section_title}_exercises.json"
-        
-        # 如果直接查找失败，尝试通过后缀查找（处理分P文件名带前缀的情况）
-        if not os.path.exists(q_fn):
-            found_q = find_matching_file(relative_directory, f"{section_title}_questions.json")
-            if found_q:
-                q_fn = found_q
-                
-        if not os.path.exists(ex_fn):
-            found_ex = find_matching_file(relative_directory, f"{section_title}_exercises.json")
-            if found_ex:
-                ex_fn = found_ex
+            # 尝试直接查找
+            q_fn = f"{relative_directory}/{section_title}_questions.json"
+            ex_fn = f"{relative_directory}/{section_title}_exercises.json"
+            
+            # 如果在当前目录没找到，尝试在 data 子目录下查找
+            if not os.path.exists(q_fn):
+                q_fn_data = f"{relative_directory}/data/{section_title}_questions.json"
+                if os.path.exists(q_fn_data):
+                    q_fn = q_fn_data
+                    
+            if not os.path.exists(ex_fn):
+                ex_fn_data = f"{relative_directory}/data/{section_title}_exercises.json"
+                if os.path.exists(ex_fn_data):
+                    ex_fn = ex_fn_data
+            
+            # 如果直接查找失败，尝试通过后缀查找（处理分P文件名带前缀的情况）
+            if not os.path.exists(q_fn):
+                found_q = find_matching_file(relative_directory, f"{section_title}_questions.json")
+                if found_q:
+                    q_fn = found_q
+                # 如果在当前目录没找到，尝试在 data 子目录下查找
+                elif os.path.exists(os.path.join(relative_directory, 'data')):
+                    found_q_data = find_matching_file(os.path.join(relative_directory, 'data'), f"{section_title}_questions.json")
+                    if found_q_data:
+                        q_fn = found_q_data
+                    
+            if not os.path.exists(ex_fn):
+                found_ex = find_matching_file(relative_directory, f"{section_title}_exercises.json")
+                if found_ex:
+                    ex_fn = found_ex
+                # 如果在当前目录没找到，尝试在 data 子目录下查找
+                elif os.path.exists(os.path.join(relative_directory, 'data')):
+                    found_ex_data = find_matching_file(os.path.join(relative_directory, 'data'), f"{section_title}_exercises.json")
+                    if found_ex_data:
+                        ex_fn = found_ex_data
 
-        # 填 questions 部分
-        if os.path.exists(q_fn):
-            j = load_json(q_fn)
-            questions = j.get("questions", [])
-            fill_questions_sheet(ws_cs, section_title, questions)
-        else:
-            print(f"未找到文件：{q_fn}")
+            # 填 questions 部分
+            if os.path.exists(q_fn):
+                j = load_json(q_fn)
+                questions = j.get("questions", [])
+                fill_questions_sheet(ws_cs, section_title, questions)
+            else:
+                print(f"未找到文件：{q_fn}")
 
-        # 填 exercises 部分
-        if os.path.exists(ex_fn):
-            j2 = load_json(ex_fn)
-            next_serial = fill_exercises_sheet(ws_ex, section_title, j2, next_serial)
-        else:
-            print(f"未找到文件：{ex_fn}")
+            # 填 exercises 部分
+            if os.path.exists(ex_fn):
+                j2 = load_json(ex_fn)
+                next_serial = fill_exercises_sheet(ws_ex, section_title, j2, next_serial)
+            else:
+                print(f"未找到文件：{ex_fn}")
 
-    # 保存
-    wb.save(excel_filename)
-    print("已完成写入并保存 Excel 文件。")
+        # 保存
+        wb.save(excel_filename)
+        print("已完成写入并保存 Excel 文件。")
 
 def main():
     """主函数"""
@@ -229,3 +253,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

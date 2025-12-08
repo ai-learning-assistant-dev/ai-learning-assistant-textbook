@@ -275,8 +275,10 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             
             # 定义所有可能生成的文件路径
             summary_json_file = os.path.join(video_dir, f'{subtitle_title}_summary.json')
-            markdown_dir = os.path.join(video_dir, 'markdown')
-            full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+            # markdown_dir = os.path.join(video_dir, 'markdown')
+            # full_content_file = os.path.join(markdown_dir, f'{subtitle_title}.md')
+            # 根据用户需求，Markdown文件应直接存放在video_dir下
+            full_content_file = os.path.join(video_dir, f'{subtitle_title}.md')
             exercises_file = os.path.join(video_dir, f'{subtitle_title}_exercises.json')
             questions_file = os.path.join(video_dir, f'{subtitle_title}_questions.json')
             
@@ -331,7 +333,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                 )
                 
                 # 创建markdown子目录（如果不存在）
-                os.makedirs(markdown_dir, exist_ok=True)
+                # os.makedirs(markdown_dir, exist_ok=True)
                 
                 with open(full_content_file, 'w', encoding='utf-8') as f:
                     f.write(full_content)
@@ -401,11 +403,38 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                 'exercises': exercises_file,
                 'questions': questions_file
             })
-        if download_all_parts:
-            save_data_to_excel(f"{video_dir}/{sanitize_filename(video_title)}.xlsx")
-        else:
-            save_data_to_excel(f"{video_dir}/{os.path.basename(video_dir)}.xlsx")
-        # 更新状态：完成
+        # 5. 将生成的数据写入 Excel
+        with tasks_lock:
+            tasks[task_id]['message'] = f'正在写入Excel: {video_title}...'
+        
+        # video_dir 指向 .../data 目录，Excel 文件实际上在上一级目录
+        # 正确的逻辑应该是去找父目录下的 .xlsx 文件
+        parent_dir = os.path.dirname(video_dir)
+        # 尝试几种可能的命名方式
+        possible_names = [
+            f"{os.path.basename(parent_dir)}.xlsx",
+            f"{sanitize_filename(video_title)}.xlsx"
+        ]
+        
+        excel_found = False
+        for name in possible_names:
+            excel_path = os.path.join(parent_dir, name)
+            if os.path.exists(excel_path):
+                save_data_to_excel(excel_path)
+                excel_found = True
+                break
+        
+        if not excel_found:
+            print(f"警告: Excel 文件未找到，尝试了: {possible_names}")
+            # 如果没找到，尝试在 video_dir (即 data 目录) 下找找看，虽然这不应该发生
+            excel_path_fallback = os.path.join(video_dir, f"{os.path.basename(video_dir)}.xlsx")
+            if os.path.exists(excel_path_fallback):
+                 save_data_to_excel(excel_path_fallback)
+            else:
+                 with tasks_lock:
+                     tasks[task_id]['message'] += ' (Excel写入失败: 文件未找到)'
+
+        # 更新任务状态为完成
         with tasks_lock:
             tasks[task_id]['status'] = TaskStatus.COMPLETED
             tasks[task_id]['message'] = f'全部完成！已处理 {total_files} 个字幕文件，生成了字幕、封面、总结、完整文档、练习题和预设问题'
@@ -819,4 +848,6 @@ if __name__ == '__main__':
     # 使用 use_reloader=False 避免Flask重新加载导致工作线程丢失
     # 使用 debug=False 在生产环境中，或者确保工作线程在每次重载后都能正确启动
     app.run(host='0.0.0.0', port=port, debug=True, use_reloader=False, threaded=True)
+
+
 

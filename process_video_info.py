@@ -78,6 +78,16 @@ def process_video_to_excel_flash(json_file_path, template_excel_path, video_inde
             # 处理分P信息
             bvid = video_info.get('bvid')
             duration_sec = video_info.get('duration', 0)
+            
+            # 如果指定了分P，尝试从 pages 中获取该分P的时长
+            if page_num:
+                pages = video_info.get('pages', [])
+                for page in pages:
+                    # 比较 page_num (通常是整数或字符串)
+                    if str(page.get('page')) == str(page_num):
+                        duration_sec = page.get('duration', 0)
+                        break
+            
             duration_min = math.ceil(duration_sec / 60) if duration_sec > 0 else 0
             
             # 确定使用的标题：如果提供了分P标题则使用，否则使用视频主标题
