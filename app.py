@@ -249,7 +249,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             api_base=model_config['api_base'],
             api_key=model_config['api_key'],
             default_model=model_config['model_name'],
-            request_timeout=300
+            request_timeout=500
         )
         
         # 创建总结器

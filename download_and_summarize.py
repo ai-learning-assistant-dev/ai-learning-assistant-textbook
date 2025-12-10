@@ -240,7 +240,7 @@ def main():
                 api_base=model_config['api_base'],
                 api_key=model_config['api_key'],
                 default_model=model_config['model_name'],
-                request_timeout=300
+                request_timeout=500
             )
             
             # 统计

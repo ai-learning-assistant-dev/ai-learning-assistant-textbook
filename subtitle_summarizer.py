@@ -1124,7 +1124,7 @@ def main():
             api_base=model_config['api_base'],
             api_key=model_config['api_key'],
             default_model=model_config['model_name'],
-            request_timeout=300  # 总结可能需要较长时间
+            request_timeout=500  # 总结可能需要较长时间
         )
         
         # 解析字幕文件
