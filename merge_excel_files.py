@@ -88,11 +88,12 @@ def merge_excel_files(manual_file, program_file, output_file=None):
             # 对应的索引: 3=URL, 4=节标题, 7=Q1, 8=Q2, 9=Q3
             p_idx_url = get_col_idx(prog_header, ['视频URL', 'URL'], 3)
             p_idx_title = get_col_idx(prog_header, ['节标题'], 4)
+            p_idx_duration = get_col_idx(prog_header, ['课时/min', '课时', '时长'], 6)
             p_idx_q1 = get_col_idx(prog_header, ['预设问题1'], 7)
             p_idx_q2 = get_col_idx(prog_header, ['预设问题2'], 8)
             p_idx_q3 = get_col_idx(prog_header, ['预设问题3'], 9)
             
-            print(f"程序表列索引检测: URL={p_idx_url}, 节标题={p_idx_title}, Q1={p_idx_q1}")
+            print(f"程序表列索引检测: URL={p_idx_url}, 节标题={p_idx_title}, 课时={p_idx_duration}, Q1={p_idx_q1}")
 
             for row in ws_prog.iter_rows(min_row=2, values_only=True):
                 if not row or len(row) <= max(p_idx_url, p_idx_title): 
@@ -107,11 +108,13 @@ def merge_excel_files(manual_file, program_file, output_file=None):
                     q2 = row[p_idx_q2] if len(row) > p_idx_q2 else None
                     q3 = row[p_idx_q3] if len(row) > p_idx_q3 else None
                     section_title = row[p_idx_title]
+                    duration = row[p_idx_duration] if len(row) > p_idx_duration else None
                     
                     # 存入字典
                     prog_data_map[key] = {
                         'questions': [q1, q2, q3],
                         'section_title': section_title,
+                        'duration': duration,
                         'raw_url': url # debug用
                     }
             
@@ -129,6 +132,13 @@ def merge_excel_files(manual_file, program_file, output_file=None):
                     o_idx_url_col_num = cell.column
                     break
             
+            # 查找 课时/min 列
+            o_idx_duration_col_num = 7 # Default
+            for cell in out_header_cells:
+                if cell.value and str(cell.value).strip() in ['课时/min', '课时', '时长']:
+                    o_idx_duration_col_num = cell.column
+                    break
+
             # 查找 预设问题 列 (我们需要列号 1-based)
             o_col_q1 = 8
             o_col_q2 = 9
@@ -195,6 +205,10 @@ def merge_excel_files(manual_file, program_file, output_file=None):
                     # 写入机械标题
                     ws_out.cell(row=current_row_idx, column=mech_title_col_idx, value=data['section_title'])
                     
+                    # 写入课时
+                    if data.get('duration') is not None:
+                        ws_out.cell(row=current_row_idx, column=o_idx_duration_col_num, value=data['duration'])
+
                     # 修正视频URL：使用程序表中规范的URL覆盖人工表中的URL
                     # 注意：o_idx_url_col_num 是列号（1-based），直接使用
                     raw_prog_url = data.get('raw_url')

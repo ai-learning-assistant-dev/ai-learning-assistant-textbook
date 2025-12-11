@@ -763,13 +763,15 @@ class BilibiliSubtitleDownloader:
                 has_subtitle = True
                 break
         
-        use_asr = False
+        # 修改策略：只要 video_transcriber 模块可用，就允许使用 ASR 作为兜底
+        # 原逻辑是只有当所有分P都没有字幕时才启用 ASR，这会导致部分分P有字幕而部分没有时，没有字幕的分P无法触发 ASR
+        use_asr = video_transcriber is not None
+        
         if not has_subtitle:
-            print("提示: 此视频没有官方/AI字幕，将尝试使用本地ASR模型转录...")
-            if video_transcriber is None:
-                print("错误: 无法加载 video_transcriber 模块，请检查依赖安装")
-                return result
-            use_asr = True
+            if use_asr:
+                print("提示: 此视频没有官方/AI字幕，将尝试使用本地ASR模型转录...")
+            else:
+                print("提示: 此视频没有官方/AI字幕，且未检测到 video_transcriber 模块，无法进行本地转录")
         
         # 确认有字幕后，才创建输出目录和下载封面
         # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
