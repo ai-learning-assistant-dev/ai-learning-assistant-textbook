@@ -560,6 +560,24 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label class="form-label">生成内容选项</label>
+                        <div style="display: flex; gap: 15px; flex-wrap: wrap; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e8ed;">
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="genSummary" checked> 要点总结
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="genFullContent" checked> 完整文档
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="genExercises" checked> 练习题
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                                <input type="checkbox" id="genQuestions" checked> 预设问题
+                            </label>
+                        </div>
+                    </div>
+
                     <div class="flex">
                         <div class="form-group flex-1">
                             <label class="form-label">输出根目录</label>
@@ -980,6 +998,13 @@
             const customFolderName = document.getElementById('customFolderName').value.trim();
             const downloadAllParts = document.getElementById('downloadAllParts').checked;
             
+            const generateOptions = {
+                summary: document.getElementById('genSummary').checked,
+                full_content: document.getElementById('genFullContent').checked,
+                exercises: document.getElementById('genExercises').checked,
+                questions: document.getElementById('genQuestions').checked
+            };
+            
             if (urls.length === 0) {
                 showAlert('taskAlert', '请输入至少一个视频URL', 'error');
                 return;
@@ -999,7 +1024,8 @@
                         output_dir: outputDir,
                         model_name: modelName,
                         custom_folder_name: customFolderName,
-                        download_all_parts: downloadAllParts
+                        download_all_parts: downloadAllParts,
+                        generate_options: generateOptions
                     })
                 });
                 

@@ -577,6 +577,10 @@ class SubtitleSummarizer:
   - 每个要点有简要说明
   - 答案长度适中（100-200字）
 
+### 🔣 数学公式规范
+- **LaTeX格式**：涉及数学符号或公式时，**必须**使用LaTeX语法。
+- **包裹符号**：行内公式用单美元符号 `$` 包裹（例如 `$x^2+y=1$`和`$\\frac{1}{4}$`），独立公式用双美元符号 `$$` 包裹。
+
 ## 输出格式
 
 严格按照以下JSON格式输出：
@@ -588,6 +592,35 @@ class SubtitleSummarizer:
   "multiple_choice": [
     {{
       "id": 1,
+      "question": "题目内容",
+      "options": {{
+        "A": "选项A内容",
+        "B": "选项B内容",
+        "C": "选项C内容",
+        "D": "选项D内容"
+      }},
+      "correct_answer": "A",
+      "explanation": "答案解析，说明为什么A正确，其他选项为何错误"
+    }}
+  ],
+    "multiple_choice": [
+    {{
+      "id": 2,
+      "question": "题目内容",
+      "options": {{
+        "A": "选项A内容",
+        "B": "选项B内容",
+        "C": "选项C内容",
+        "D": "选项D内容"
+      }},
+      "correct_answer": "A",
+      "explanation": "答案解析，说明为什么A正确，其他选项为何错误"
+    }}
+  ],
+   ...,
+    "multiple_choice": [
+    {{
+      "id": 9,
       "question": "题目内容",
       "options": {{
         "A": "选项A内容",
@@ -634,14 +667,50 @@ class SubtitleSummarizer:
         
         return prompt
     
-    def generate_exercises(self, subtitle_text: str, video_title: str = "", stream: bool = False) -> Dict:
+    def validate_exercises_format(self, data: Dict) -> bool:
         """
-        生成练习题
+        验证练习题格式是否正确
+        
+        Args:
+            data: 解析后的练习题数据
+            
+        Returns:
+            是否符合格式要求
+        """
+        if not isinstance(data, dict):
+            return False
+        
+        # 必须包含 multiple_choice 且为列表
+        if "multiple_choice" not in data or not isinstance(data["multiple_choice"], list):
+            return False
+            
+        # 必须包含 short_answer 且为列表
+        if "short_answer" not in data or not isinstance(data["short_answer"], list):
+            return False
+            
+        # 检查是否为空（解析失败时会返回空列表，或者生成的JSON内容为空）
+        # 正常生成的习题不应该为空
+        if len(data["multiple_choice"]) == 0 and "raw_response" in data:
+            # 这是解析失败的情况
+            return False
+            
+        # 检查题目结构是否基本正确（可选）
+        if len(data["multiple_choice"]) > 0:
+            first_q = data["multiple_choice"][0]
+            if not isinstance(first_q, dict) or "options" not in first_q or "correct_answer" not in first_q:
+                return False
+                
+        return True
+
+    def generate_exercises(self, subtitle_text: str, video_title: str = "", stream: bool = False, max_retries: int = 3) -> Dict:
+        """
+        生成练习题（带重试机制）
         
         Args:
             subtitle_text: 字幕文本
             video_title: 视频标题
             stream: 是否使用流式输出
+            max_retries: 最大重试次数
             
         Returns:
             包含练习题的字典
@@ -653,19 +722,48 @@ class SubtitleSummarizer:
             {"role": "user", "content": prompt}
         ]
         
-        if stream:
-            print("正在生成练习题（流式输出）...\n")
-            full_response = ""
-            for chunk in self.llm_client.chat_completions_stream(messages):
-                print(chunk, end='', flush=True)
-                full_response += chunk
-            print("\n")
-            return self._parse_exercises_response(full_response)
-        else:
-            print("正在生成练习题...\n")
-            response = self.llm_client.chat_completions(messages)
-            content = response['choices'][0]['message']['content']
-            return self._parse_exercises_response(content)
+        last_result = None
+        
+        for attempt in range(max_retries):
+            try:
+                current_try_msg = f"（尝试 {attempt + 1}/{max_retries}）"
+                if stream:
+                    print(f"正在生成练习题{current_try_msg}（流式输出）...\n")
+                    full_response = ""
+                    for chunk in self.llm_client.chat_completions_stream(messages):
+                        print(chunk, end='', flush=True)
+                        full_response += chunk
+                    print("\n")
+                    result = self._parse_exercises_response(full_response)
+                else:
+                    print(f"正在生成练习题{current_try_msg}...\n")
+                    response = self.llm_client.chat_completions(messages)
+                    content = response['choices'][0]['message']['content']
+                    result = self._parse_exercises_response(content)
+                
+                # 验证格式
+                if self.validate_exercises_format(result):
+                    return result
+                
+                print(f"警告：生成的练习题格式不符合要求{current_try_msg}，准备重试...")
+                last_result = result
+                
+                # 可以在这里添加一些提示词的强化，但简单重试通常有效
+                # 如果是最后一次尝试，就不需要再处理了，循环结束会返回
+                
+            except Exception as e:
+                print(f"生成练习题出错{current_try_msg}: {e}")
+                import traceback
+                traceback.print_exc()
+        
+        print("错误：多次重试后仍无法生成符合格式的练习题，返回最后一次生成的结果")
+        if last_result:
+            return last_result
+            
+        return {
+            "multiple_choice": [],
+            "short_answer": []
+        }
     
     def _parse_exercises_response(self, response_text: str) -> Dict:
         """

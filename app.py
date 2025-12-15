@@ -160,11 +160,12 @@ def task_queue_worker():
             cookies_file = task_data['cookies_file']
             custom_folder_name = task_data.get('custom_folder_name')
             download_all_parts = task_data.get('download_all_parts', False)
+            generate_options = task_data.get('generate_options')
             
             print(f"[{thread_name}] 开始处理任务 {task_id}: {url}")
             
             # 执行任务
-            process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts)
+            process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts, generate_options)
             
             print(f"[{thread_name}] 任务 {task_id} 处理完成")
             
@@ -180,8 +181,15 @@ def task_queue_worker():
             task_queue.task_done()
 
 
-def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False):
+def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False, generate_options=None):
     """处理单个视频的下载和总结任务"""
+    if generate_options is None:
+        generate_options = {
+            'summary': True,
+            'full_content': True,
+            'exercises': True,
+            'questions': True
+        }
     try:
         # 检查停止标志
         with tasks_lock:
@@ -288,24 +296,28 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             plain_text = None
             
             # ========== 1. 生成要点总结 ==========
-            if os.path.exists(summary_json_file):
-                with tasks_lock:
-                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结已存在，跳过'
+            if generate_options.get('summary', True):
+                if os.path.exists(summary_json_file):
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结已存在，跳过'
+                else:
+                    with tasks_lock:
+                        tasks[task_id]['status'] = TaskStatus.SUMMARIZING
+                        tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结...'
+                        tasks[task_id]['subtitle_file'] = subtitle_file
+                    
+                    # 解析字幕
+                    if subtitles is None:
+                        subtitles = SRTParser.parse_srt_file(subtitle_file)
+                        subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
+                    
+                    summary = summarizer.summarize(subtitle_text, stream=False)
+                    
+                    with open(summary_json_file, 'w', encoding='utf-8') as f:
+                        json.dump(summary, f, ensure_ascii=False, indent=2)
             else:
                 with tasks_lock:
-                    tasks[task_id]['status'] = TaskStatus.SUMMARIZING
-                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结...'
-                    tasks[task_id]['subtitle_file'] = subtitle_file
-                
-                # 解析字幕
-                if subtitles is None:
-                    subtitles = SRTParser.parse_srt_file(subtitle_file)
-                    subtitle_text = SRTParser.format_subtitles_for_llm(subtitles)
-                
-                summary = summarizer.summarize(subtitle_text, stream=False)
-                
-                with open(summary_json_file, 'w', encoding='utf-8') as f:
-                    json.dump(summary, f, ensure_ascii=False, indent=2)
+                     tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结 (用户选择跳过)'
             
             # 检查停止标志
             with tasks_lock:
@@ -315,28 +327,32 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                     return
             
             # ========== 2. 生成完整内容文档 ==========
-            if os.path.exists(full_content_file):
-                with tasks_lock:
-                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档已存在，跳过'
+            if generate_options.get('full_content', True):
+                if os.path.exists(full_content_file):
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档已存在，跳过'
+                else:
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档...'
+                    
+                    # 预处理字幕文本
+                    if plain_text is None:
+                        plain_text = SRTParser.extract_plain_text(subtitle_file)
+                    
+                    full_content = summarizer.generate_full_content(
+                        plain_text,
+                        video_title=video_title,
+                        stream=False
+                    )
+                    
+                    # 创建markdown子目录（如果不存在）
+                    # os.makedirs(markdown_dir, exist_ok=True)
+                    
+                    with open(full_content_file, 'w', encoding='utf-8') as f:
+                        f.write(full_content)
             else:
                 with tasks_lock:
-                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档...'
-                
-                # 预处理字幕文本
-                if plain_text is None:
-                    plain_text = SRTParser.extract_plain_text(subtitle_file)
-                
-                full_content = summarizer.generate_full_content(
-                    plain_text,
-                    video_title=video_title,
-                    stream=False
-                )
-                
-                # 创建markdown子目录（如果不存在）
-                # os.makedirs(markdown_dir, exist_ok=True)
-                
-                with open(full_content_file, 'w', encoding='utf-8') as f:
-                    f.write(full_content)
+                     tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档 (用户选择跳过)'
             
             # 检查停止标志
             with tasks_lock:
@@ -346,25 +362,29 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                     return
             
             # ========== 3. 生成练习题 ==========
-            if os.path.exists(exercises_file):
-                with tasks_lock:
-                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题已存在，跳过'
+            if generate_options.get('exercises', True):
+                if os.path.exists(exercises_file):
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题已存在，跳过'
+                else:
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题...'
+                    
+                    # 预处理字幕文本（如果还没有）
+                    if plain_text is None:
+                        plain_text = SRTParser.extract_plain_text(subtitle_file)
+                    
+                    exercises = summarizer.generate_exercises(
+                        plain_text,
+                        video_title=video_title,
+                        stream=False
+                    )
+                    
+                    with open(exercises_file, 'w', encoding='utf-8') as f:
+                        json.dump(exercises, f, ensure_ascii=False, indent=2)
             else:
                 with tasks_lock:
-                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题...'
-                
-                # 预处理字幕文本（如果还没有）
-                if plain_text is None:
-                    plain_text = SRTParser.extract_plain_text(subtitle_file)
-                
-                exercises = summarizer.generate_exercises(
-                    plain_text,
-                    video_title=video_title,
-                    stream=False
-                )
-                
-                with open(exercises_file, 'w', encoding='utf-8') as f:
-                    json.dump(exercises, f, ensure_ascii=False, indent=2)
+                     tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题 (用户选择跳过)'
             
             # 检查停止标志
             with tasks_lock:
@@ -374,25 +394,29 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                     return
             
             # ========== 4. 生成预设问题 ==========
-            if os.path.exists(questions_file):
-                with tasks_lock:
-                    tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题已存在，跳过'
+            if generate_options.get('questions', True):
+                if os.path.exists(questions_file):
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题已存在，跳过'
+                else:
+                    with tasks_lock:
+                        tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题...'
+                    
+                    # 预处理字幕文本（如果还没有）
+                    if plain_text is None:
+                        plain_text = SRTParser.extract_plain_text(subtitle_file)
+                    
+                    preset_questions = summarizer.generate_preset_questions(
+                        plain_text,
+                        video_title=video_title,
+                        stream=False
+                    )
+                    
+                    with open(questions_file, 'w', encoding='utf-8') as f:
+                        json.dump(preset_questions, f, ensure_ascii=False, indent=2)
             else:
                 with tasks_lock:
-                    tasks[task_id]['message'] = f'正在处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题...'
-                
-                # 预处理字幕文本（如果还没有）
-                if plain_text is None:
-                    plain_text = SRTParser.extract_plain_text(subtitle_file)
-                
-                preset_questions = summarizer.generate_preset_questions(
-                    plain_text,
-                    video_title=video_title,
-                    stream=False
-                )
-                
-                with open(questions_file, 'w', encoding='utf-8') as f:
-                    json.dump(preset_questions, f, ensure_ascii=False, indent=2)
+                     tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题 (用户选择跳过)'
             
             # 记录本字幕生成的所有文件
             all_generated_files.append({
@@ -570,6 +594,12 @@ def create_tasks():
         cookies_file = data.get('cookies_file', 'cookies.txt')
         custom_folder_name = data.get('custom_folder_name', '').strip() or None
         download_all_parts = data.get('download_all_parts', False)
+        generate_options = data.get('generate_options', {
+            'summary': True,
+            'full_content': True,
+            'exercises': True,
+            'questions': True
+        })
         
         if not urls:
             return jsonify({
@@ -657,7 +687,8 @@ def create_tasks():
                 'model_name': model_name,
                 'cookies_file': cookies_file,
                 'custom_folder_name': custom_folder_name,
-                'download_all_parts': download_all_parts
+                'download_all_parts': download_all_parts,
+                'generate_options': generate_options
             }
             task_queue.put(task_data)
             
