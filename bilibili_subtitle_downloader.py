@@ -14,7 +14,7 @@ import time
 import random
 import hashlib
 import urllib.parse
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, TypedDict
 import argparse
 from pathlib import Path
 import process_video_info
@@ -23,6 +23,18 @@ try:
 except ImportError:
     video_transcriber = None
 
+class ApiAttempt(TypedDict):
+    name: str
+    url: str
+    
+class VideoInfo(TypedDict):
+    bvid: str
+    title: str
+    intro: str
+    cover: str
+    upper: str
+    duration: int
+                    
 
 class BilibiliSubtitleDownloader:
     """Bilibili字幕下载器"""
@@ -229,7 +241,7 @@ class BilibiliSubtitleDownloader:
                 self._wait_if_needed()
                 
                 # B站收藏夹API
-                api_url = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&ps={page_size}&pn={page_num}'
+                api_url: str = f'https://api.bilibili.com/x/v3/fav/resource/list?media_id={fid}&ps={page_size}&pn={page_num}'
                 
                 if self.debug:
                     print(f"[DEBUG] 请求收藏夹API (第{page_num}页): {api_url}")
@@ -249,7 +261,7 @@ class BilibiliSubtitleDownloader:
                     break
                 
                 for media in medias:
-                    video_info = {
+                    video_info: VideoInfo = {
                         'bvid': media.get('bvid'),
                         'title': media.get('title'),
                         'intro': media.get('intro'),
@@ -257,6 +269,9 @@ class BilibiliSubtitleDownloader:
                         'upper': media.get('upper', {}).get('name'),
                         'duration': media.get('duration')
                     }
+                    from whatis import whatis
+                    whatis(video_info)
+                    
                     videos.append(video_info)
                     
                     if self.debug:
@@ -364,8 +379,9 @@ class BilibiliSubtitleDownloader:
         Returns:
             字幕信息列表，失败返回None
         """
+        
         # 定义要尝试的API列表
-        api_attempts = []
+        api_attempts: List[ApiAttempt] = []
         
         # 1. 尝试不带签名的 Wbi API (参照 PRE 版本，兼容性好)
         api_attempts.append({
@@ -458,7 +474,7 @@ class BilibiliSubtitleDownloader:
             
         return None
     
-    def download_subtitle(self, subtitle_url: str, is_ai: bool = False) -> Optional[List[Dict]]:
+    def download_subtitle(self, subtitle_url: str, is_ai: bool = False) -> Optional[List[Dict] | None]:
         """
         下载字幕内容（带重试机制）
         
@@ -513,7 +529,8 @@ class BilibiliSubtitleDownloader:
         
         return None
     
-    def save_subtitle_as_srt(self, subtitle_content: List[Dict], output_path: str):
+
+    def save_subtitle_as_srt(self, subtitle_content: List[Dict], output_path: str) -> None:
         """
         将字幕保存为SRT格式
         
@@ -527,8 +544,8 @@ class BilibiliSubtitleDownloader:
                 f.write(f"{index}\n")
                 
                 # 时间轴
-                start_time = self._format_timestamp(item['from'])
-                end_time = self._format_timestamp(item['to'])
+                start_time: str = self._format_timestamp(item['from'])
+                end_time: str = self._format_timestamp(item['to'])
                 f.write(f"{start_time} --> {end_time}\n")
                 
                 # 字幕内容
@@ -612,10 +629,10 @@ class BilibiliSubtitleDownloader:
         Returns:
             格式化的时间字符串
         """
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        secs = int(seconds % 60)
-        millis = int((seconds - int(seconds)) * 1000)
+        hours: int = int(seconds // 3600)
+        minutes: int = int((seconds % 3600) // 60)
+        secs: int = int(seconds % 60)
+        millis: int = int((seconds - int(seconds)) * 1000)
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     

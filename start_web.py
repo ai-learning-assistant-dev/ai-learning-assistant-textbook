@@ -6,7 +6,25 @@ Web服务启动脚本
 
 import os
 import sys
+from typing import TypedDict
 
+# /config/app_config.json 
+class AppConfig(TypedDict):
+    output_directory: str
+    last_selected_model: str
+    cookies_file: str
+    auto_refresh_interval: int
+    web_port: int
+    download_all_parts: bool
+    max_concurrent_tasks: int
+
+class DefaultAppConfig(TypedDict):
+    output_directory: str
+    last_selected_model: str
+    cookies_file: str
+    auto_refresh_interval: int
+    web_port: int
+    
 def check_dependencies():
     """检查依赖"""
     try:
@@ -58,7 +76,7 @@ def check_config():
     if not os.path.exists('config/app_config.json'):
         # 创建默认配置
         import json
-        default_config = {
+        default_config: DefaultAppConfig = {
             'output_directory': 'subtitles',
             'last_selected_model': '',
             'cookies_file': 'cookies.txt',
@@ -100,13 +118,13 @@ def main():
     
     # 加载配置获取端口
     import json
-    config_file = 'config/app_config.json'
-    port = 5000
+    config_file: str = 'config/app_config.json'
+    port: int = 5000
     if os.path.exists(config_file):
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-                port = config.get('web_port', 5000)
+                config: AppConfig = json.load(f)
+                port: int = config.get('web_port', 5000)
         except:
             pass
     
