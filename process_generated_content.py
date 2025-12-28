@@ -1,3 +1,4 @@
+from openpyxl.worksheet.worksheet import Worksheet
 import os
 import json
 from openpyxl import load_workbook
@@ -147,8 +148,8 @@ def save_data_to_excel(excel_filename):
     with excel_file_lock:
         relative_directory = os.path.dirname(excel_filename)
         wb = load_workbook(excel_filename)
-        ws_cs = wb["chapters_sections"]
-        ws_ex = wb["exercises"]
+        ws_cs: Worksheet = wb["chapters_sections"]
+        ws_ex: Worksheet = wb["exercises"]
         ws_ex.delete_rows(2, ws_ex.max_row - 1)  # 清空 exercises 表中除表头外的所有行
         # 先处理 chapters_sections sheet，把预设问题填进去
         header_cs = {cell.value: cell.column for cell in ws_cs[1]}
