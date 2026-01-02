@@ -1,4 +1,9 @@
 {
-  "workspaces": []
+  "workspaces": [
+    {
+      "name": "计算机网络",
+      "path": "subtitles\\计算机网络",
+      "created_at": "2026-01-02T18:04:46.322666"
+    }
+  ]
 }
-
