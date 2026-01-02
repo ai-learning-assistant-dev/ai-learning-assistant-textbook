@@ -10,6 +10,7 @@ import json
 import uuid
 import time
 import threading
+import shutil
 from pathlib import Path
 from datetime import datetime
 from queue import Queue
@@ -117,6 +118,30 @@ def save_app_config(config):
     
     with open(config_file, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=2)
+
+
+def load_workspaces():
+    """加载工作区配置"""
+    config_file = 'config/workspace.json'
+    if not os.path.exists(config_file):
+        return []
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('workspaces', [])
+    except Exception as e:
+        print(f"加载工作区配置失败: {e}")
+        return []
+
+
+def save_workspaces(workspaces):
+    """保存工作区配置"""
+    config_file = 'config/workspace.json'
+    os.makedirs(os.path.dirname(config_file), exist_ok=True)
+    
+    with open(config_file, 'w', encoding='utf-8') as f:
+        json.dump({'workspaces': workspaces}, f, ensure_ascii=False, indent=2)
 
 
 def start_worker_threads():
@@ -572,6 +597,146 @@ def delete_model(model_id):
         
         return jsonify({
             'success': True
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/workspace', methods=['POST'])
+def create_workspace():
+    """创建工作区"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        path = data.get('path', '').strip()
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': '工作区名称不能为空'
+            }), 400
+        
+        if not path:
+            return jsonify({
+                'success': False,
+                'error': '工作区路径不能为空'
+            }), 400
+        
+        # 加载现有工作区
+        workspaces = load_workspaces()
+        
+        # 检查名称是否重复
+        for ws in workspaces:
+            if ws.get('name') == name:
+                return jsonify({
+                    'success': False,
+                    'error': f'工作区名称 "{name}" 已存在'
+                }), 400
+        
+        # 构建完整路径
+        full_path = os.path.abspath(path)
+        
+        # 检查路径是否已存在
+        if os.path.exists(full_path):
+            return jsonify({
+                'success': False,
+                'error': f'路径 "{path}" 已存在'
+            }), 400
+        
+        # 创建文件夹
+        try:
+            os.makedirs(full_path, exist_ok=False)
+        except OSError as e:
+            return jsonify({
+                'success': False,
+                'error': f'创建文件夹失败: {str(e)}'
+            }), 500
+        
+        # 添加新工作区
+        new_workspace = {
+            'name': name,
+            'path': path,
+            'created_at': datetime.now().isoformat()
+        }
+        workspaces.append(new_workspace)
+        
+        # 保存到文件
+        save_workspaces(workspaces)
+        
+        return jsonify({
+            'success': True,
+            'workspace': new_workspace,
+            'full_path': full_path
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/workspace', methods=['GET'])
+def list_workspaces():
+    """获取所有工作区列表"""
+    try:
+        workspaces = load_workspaces()
+        return jsonify({
+            'success': True,
+            'workspaces': workspaces
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/workspace/<workspace_name>', methods=['DELETE'])
+def delete_workspace(workspace_name):
+    """删除工作区"""
+    try:
+        # 加载现有工作区
+        workspaces = load_workspaces()
+        
+        # 查找要删除的工作区
+        target_workspace = None
+        for ws in workspaces:
+            if ws.get('name') == workspace_name:
+                target_workspace = ws
+                break
+        
+        if not target_workspace:
+            return jsonify({
+                'success': False,
+                'error': f'工作区 "{workspace_name}" 不存在'
+            }), 404
+        
+        # 获取工作区路径
+        workspace_path = target_workspace.get('path')
+        full_path = os.path.abspath(workspace_path)
+        
+        # 删除文件夹（如果存在）
+        if os.path.exists(full_path):
+            try:
+                shutil.rmtree(full_path)
+            except OSError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'删除文件夹失败: {str(e)}'
+                }), 500
+        
+        # 从列表中删除工作区
+        workspaces = [ws for ws in workspaces if ws.get('name') != workspace_name]
+        
+        # 保存到文件
+        save_workspaces(workspaces)
+        
+        return jsonify({
+            'success': True,
+            'message': f'工作区 "{workspace_name}" 已删除',
+            'deleted_path': full_path
         })
     except Exception as e:
         return jsonify({

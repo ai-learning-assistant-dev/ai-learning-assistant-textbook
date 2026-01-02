@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -446,8 +447,13 @@
         }
 
         @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
         }
 
         .flex {
@@ -460,6 +466,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -471,9 +478,9 @@
             <!-- 模型配置 -->
             <div class="section">
                 <div class="section-title">模型配置</div>
-                
+
                 <div id="modelAlert"></div>
-                
+
                 <div class="model-list-header">
                     <span class="model-count" id="modelCount">加载中...</span>
                     <div style="display: flex; gap: 10px;">
@@ -485,7 +492,7 @@
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="model-list-container">
                     <div id="modelList" class="model-list">
                         <div class="empty-state">加载中...</div>
@@ -496,18 +503,15 @@
             <!-- 任务配置 -->
             <div class="section">
                 <div class="section-title">任务配置</div>
-                
+
                 <div id="taskAlert"></div>
 
                 <form id="taskForm">
                     <div class="form-group">
                         <label class="form-label">视频URL（每行一个）</label>
-                        <textarea 
-                            class="form-textarea" 
-                            id="videoUrls" 
+                        <textarea class="form-textarea" id="videoUrls"
                             placeholder="支持视频URL：&#10;https://www.bilibili.com/video/BV1xx411c7mu&#10;&#10;支持分P视频URL：&#10;https://www.bilibili.com/video/BV1xx411c7mu?p=2&#10;&#10;支持收藏夹URL：&#10;https://space.bilibili.com/UID/favlist?fid=收藏夹ID"
-                            required
-                        ></textarea>
+                            required></textarea>
                         <div style="font-size: 12px; color: #666; margin-top: 5px;">
                             💡 提示：支持单个视频URL、多个视频URL和收藏夹URL混合输入，收藏夹会自动展开
                         </div>
@@ -517,24 +521,17 @@
                         <label class="form-label">
                             自定义文件夹名称（可选）
                         </label>
-                        <input 
-                            type="text" 
-                            class="form-input" 
-                            id="customFolderName" 
-                            placeholder="留空则使用视频标题作为文件夹名称"
-                        />
+                        <input type="text" class="form-input" id="customFolderName" placeholder="留空则使用视频标题作为文件夹名称" />
                         <div style="font-size: 12px; color: #666; margin-top: 5px;">
                             💡 提示：多个URL时，指定此选项可将所有视频文件放在同一个文件夹内
                         </div>
                     </div>
 
                     <div class="form-group">
-                        <label class="form-label" style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
-                            <input 
-                                type="checkbox" 
-                                id="downloadAllParts" 
-                                style="cursor: pointer; width: 18px; height: 18px;"
-                            />
+                        <label class="form-label"
+                            style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="downloadAllParts"
+                                style="cursor: pointer; width: 18px; height: 18px;" />
                             <span>下载所有分P视频</span>
                         </label>
                         <div style="font-size: 12px; color: #666; margin-top: 5px; margin-left: 28px;">
@@ -546,15 +543,8 @@
                         <label class="form-label">
                             最大并发任务数
                         </label>
-                        <input 
-                            type="number" 
-                            class="form-input" 
-                            id="maxConcurrentTasks" 
-                            min="1"
-                            max="10"
-                            value="2"
-                            placeholder="同时处理的视频数量"
-                        />
+                        <input type="number" class="form-input" id="maxConcurrentTasks" min="1" max="10" value="2"
+                            placeholder="同时处理的视频数量" />
                         <div style="font-size: 12px; color: #666; margin-top: 5px;">
                             💡 提示：同时处理的视频数量。设置为1可避免API并发限制，设置为2-3可提高效率（需要API支持）
                         </div>
@@ -562,7 +552,8 @@
 
                     <div class="form-group">
                         <label class="form-label">生成内容选项</label>
-                        <div style="display: flex; gap: 15px; flex-wrap: wrap; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e8ed;">
+                        <div
+                            style="display: flex; gap: 15px; flex-wrap: wrap; padding: 10px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e1e8ed;">
                             <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
                                 <input type="checkbox" id="genSummary" checked> 要点总结
                             </label>
@@ -581,14 +572,8 @@
                     <div class="flex">
                         <div class="form-group flex-1">
                             <label class="form-label">输出根目录</label>
-                            <input 
-                                type="text" 
-                                class="form-input" 
-                                id="outputDir" 
-                                value="subtitles"
-                                placeholder="例如: subtitles 或 D:/Videos/subtitles"
-                                required
-                            />
+                            <input type="text" class="form-input" id="outputDir" value="subtitles"
+                                placeholder="例如: subtitles 或 D:/Videos/subtitles" required />
                             <div style="font-size: 12px; color: #666; margin-top: 5px;">
                                 支持相对路径（subtitles）或绝对路径（D:/Videos/subtitles）
                             </div>
@@ -622,22 +607,17 @@
     <div id="modelModal" class="modal">
         <div class="modal-content">
             <div class="modal-title" id="modelModalTitle">添加模型</div>
-            
+
             <form id="modelForm">
                 <input type="hidden" id="modelId">
-                
+
                 <div class="form-group">
                     <label class="form-label">
                         模型名称
                         <span style="color: #999; font-weight: normal; font-size: 12px;">（自定义，方便识别）</span>
                     </label>
-                    <input 
-                        type="text" 
-                        class="form-input" 
-                        id="modelName" 
-                        placeholder="例如: DeepSeek-V3 或 通义千问"
-                        required
-                    />
+                    <input type="text" class="form-input" id="modelName" placeholder="例如: DeepSeek-V3 或 通义千问"
+                        required />
                 </div>
 
                 <div class="form-group">
@@ -645,13 +625,8 @@
                         模型标识
                         <span style="color: #999; font-weight: normal; font-size: 12px;">（服务商提供的model参数）</span>
                     </label>
-                    <input 
-                        type="text" 
-                        class="form-input" 
-                        id="modelModelName" 
-                        placeholder="例如: deepseek-ai/DeepSeek-V3"
-                        required
-                    />
+                    <input type="text" class="form-input" id="modelModelName" placeholder="例如: deepseek-ai/DeepSeek-V3"
+                        required />
                 </div>
 
                 <div class="form-group">
@@ -659,26 +634,15 @@
                         API地址
                         <span style="color: #999; font-weight: normal; font-size: 12px;">（完整的base URL）</span>
                     </label>
-                    <input 
-                        type="text" 
-                        class="form-input" 
-                        id="modelApiBase" 
-                        placeholder="例如: https://api.siliconflow.cn/v1"
-                        required
-                    />
+                    <input type="text" class="form-input" id="modelApiBase"
+                        placeholder="例如: https://api.siliconflow.cn/v1" required />
                 </div>
 
                 <div class="form-group">
                     <label class="form-label">
                         API密钥
                     </label>
-                    <input 
-                        type="password" 
-                        class="form-input" 
-                        id="modelApiKey" 
-                        placeholder="sk-xxxxx"
-                        required
-                    />
+                    <input type="password" class="form-input" id="modelApiKey" placeholder="sk-xxxxx" required />
                     <div style="font-size: 11px; color: #999; margin-top: 4px;">
                         请妥善保管，不要泄露给他人
                     </div>
@@ -703,30 +667,30 @@
         let appConfig = {};
 
         // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             loadAppConfig();
             loadModels();
             checkCookiesConfig();
-            
+
             // 设置表单提交
             document.getElementById('taskForm').addEventListener('submit', handleTaskSubmit);
             document.getElementById('modelForm').addEventListener('submit', handleModelSubmit);
-            
+
             // 监听输出目录变化，自动保存
-            document.getElementById('outputDir').addEventListener('blur', function() {
+            document.getElementById('outputDir').addEventListener('blur', function () {
                 const path = this.value.trim();
                 if (path) {
                     saveAppConfig({ output_directory: path });
                 }
             });
-            
+
             // 监听分P下载开关变化，自动保存
-            document.getElementById('downloadAllParts').addEventListener('change', function() {
+            document.getElementById('downloadAllParts').addEventListener('change', function () {
                 saveAppConfig({ download_all_parts: this.checked });
             });
-            
+
             // 监听并发数变化，自动保存
-            document.getElementById('maxConcurrentTasks').addEventListener('change', function() {
+            document.getElementById('maxConcurrentTasks').addEventListener('change', function () {
                 const value = parseInt(this.value);
                 if (value >= 1 && value <= 10) {
                     saveAppConfig({ max_concurrent_tasks: value });
@@ -739,20 +703,20 @@
             try {
                 const response = await fetch('/api/config');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     appConfig = data.config;
-                    
+
                     // 应用配置到界面
                     if (appConfig.output_directory) {
                         document.getElementById('outputDir').value = appConfig.output_directory;
                     }
-                    
+
                     // 恢复分P下载开关状态
                     if (appConfig.download_all_parts !== undefined) {
                         document.getElementById('downloadAllParts').checked = appConfig.download_all_parts;
                     }
-                    
+
                     // 恢复并发数配置
                     if (appConfig.max_concurrent_tasks !== undefined) {
                         document.getElementById('maxConcurrentTasks').value = appConfig.max_concurrent_tasks;
@@ -768,10 +732,10 @@
             try {
                 const response = await fetch('/api/config', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(updates)
                 });
-                
+
                 const data = await response.json();
                 if (data.success) {
                     appConfig = data.config;
@@ -786,7 +750,7 @@
             try {
                 const response = await fetch('/api/config/cookies');
                 const data = await response.json();
-                
+
                 if (!data.configured) {
                     showAlert('taskAlert', '提示：请先配置cookies.txt文件中的SESSDATA，否则无法下载AI字幕', 'warning');
                 }
@@ -800,7 +764,7 @@
             try {
                 const response = await fetch('/api/models');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     models = data.models;
                     renderModels();
@@ -817,19 +781,19 @@
         function renderModels() {
             const container = document.getElementById('modelList');
             const countEl = document.getElementById('modelCount');
-            
+
             if (models.length === 0) {
                 container.innerHTML = '<div class="empty-state">暂无模型配置，请先添加</div>';
                 countEl.textContent = '暂无模型';
                 return;
             }
-            
+
             countEl.textContent = `已配置 ${models.length} 个模型`;
-            
+
             container.innerHTML = models.map((model, index) => {
                 // 简化API地址显示
                 const apiDisplay = model.api_base.replace('https://', '').replace('http://', '').split('/')[0];
-                
+
                 return `
                 <div class="model-item">
                     <div class="model-item-header">
@@ -859,7 +823,7 @@
         function toggleModelList() {
             const list = document.getElementById('modelList');
             const toggle = document.getElementById('modelToggle');
-            
+
             if (list.classList.contains('collapsed')) {
                 list.classList.remove('collapsed');
                 toggle.textContent = '收起列表';
@@ -872,11 +836,11 @@
         // 更新模型选择下拉框
         function updateModelSelect() {
             const select = document.getElementById('modelSelect');
-            select.innerHTML = '<option value="">请选择模型</option>' + 
+            select.innerHTML = '<option value="">请选择模型</option>' +
                 models.map(model => `
                     <option value="${escapeHtml(model.name)}">${escapeHtml(model.name)}</option>
                 `).join('');
-            
+
             // 恢复上次选择的模型
             if (appConfig.last_selected_model) {
                 select.value = appConfig.last_selected_model;
@@ -888,10 +852,10 @@
             document.getElementById('modelModalTitle').textContent = '添加模型';
             document.getElementById('modelForm').reset();
             document.getElementById('modelId').value = '';
-            
+
             // 重置API密钥输入框的placeholder
             document.getElementById('modelApiKey').placeholder = 'sk-xxxxx';
-            
+
             document.getElementById('modelModal').classList.add('active');
         }
 
@@ -899,31 +863,31 @@
         function editModel(modelId) {
             const model = models.find(m => m.id === modelId);
             if (!model) return;
-            
+
             document.getElementById('modelModalTitle').textContent = '编辑模型';
             document.getElementById('modelId').value = model.id;
             document.getElementById('modelName').value = model.name;
             document.getElementById('modelModelName').value = model.model_name;
             document.getElementById('modelApiBase').value = model.api_base;
-            
+
             // API密钥显示为已保存的提示
             const apiKeyInput = document.getElementById('modelApiKey');
             apiKeyInput.value = model.api_key;
             apiKeyInput.placeholder = '不修改请保持原值';
-            
+
             document.getElementById('modelModal').classList.add('active');
         }
 
         // 删除模型
         async function deleteModel(modelId) {
             if (!confirm('确定要删除这个模型吗？')) return;
-            
+
             try {
                 const response = await fetch(`/api/models/${modelId}`, {
                     method: 'DELETE'
                 });
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert('modelAlert', '删除成功', 'success');
                     loadModels();
@@ -943,7 +907,7 @@
         // 处理模型表单提交
         async function handleModelSubmit(e) {
             e.preventDefault();
-            
+
             const modelId = document.getElementById('modelId').value;
             const modelData = {
                 name: document.getElementById('modelName').value,
@@ -951,27 +915,27 @@
                 api_base: document.getElementById('modelApiBase').value,
                 api_key: document.getElementById('modelApiKey').value
             };
-            
+
             try {
                 let response;
                 if (modelId) {
                     // 更新
                     response = await fetch(`/api/models/${modelId}`, {
                         method: 'PUT',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(modelData)
                     });
                 } else {
                     // 添加
                     response = await fetch('/api/models', {
                         method: 'POST',
-                        headers: {'Content-Type': 'application/json'},
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(modelData)
                     });
                 }
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     showAlert('modelAlert', modelId ? '更新成功' : '添加成功', 'success');
                     hideModelModal();
@@ -987,38 +951,38 @@
         // 处理任务表单提交
         async function handleTaskSubmit(e) {
             e.preventDefault();
-            
+
             const urls = document.getElementById('videoUrls').value
                 .split('\n')
                 .map(u => u.trim())
                 .filter(u => u);
-            
+
             const outputDir = document.getElementById('outputDir').value;
             const modelName = document.getElementById('modelSelect').value;
             const customFolderName = document.getElementById('customFolderName').value.trim();
             const downloadAllParts = document.getElementById('downloadAllParts').checked;
-            
+
             const generateOptions = {
                 summary: document.getElementById('genSummary').checked,
                 full_content: document.getElementById('genFullContent').checked,
                 exercises: document.getElementById('genExercises').checked,
                 questions: document.getElementById('genQuestions').checked
             };
-            
+
             if (urls.length === 0) {
                 showAlert('taskAlert', '请输入至少一个视频URL', 'error');
                 return;
             }
-            
+
             if (!modelName) {
                 showAlert('taskAlert', '请选择模型', 'error');
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/tasks', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         urls: urls,
                         output_dir: outputDir,
@@ -1028,16 +992,16 @@
                         generate_options: generateOptions
                     })
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
-                    const message = data.total_videos 
+                    const message = data.total_videos
                         ? `已创建 ${data.task_ids.length} 个任务，共 ${data.total_videos} 个视频`
                         : `已创建 ${data.task_ids.length} 个任务`;
                     showAlert('taskAlert', message, 'success');
                     document.getElementById('videoUrls').value = '';
-                    
+
                     // 开始轮询任务状态
                     startPolling();
                 } else {
@@ -1051,7 +1015,7 @@
         // 开始轮询任务状态
         function startPolling() {
             if (pollInterval) clearInterval(pollInterval);
-            
+
             loadTasks(); // 立即加载一次
             pollInterval = setInterval(loadTasks, 2000); // 每2秒刷新
         }
@@ -1061,20 +1025,20 @@
             try {
                 const response = await fetch('/api/tasks');
                 const data = await response.json();
-                
+
                 if (data.success) {
                     tasks = {};
                     data.tasks.forEach(task => {
                         tasks[task.id] = task;
                     });
                     renderTasks();
-                    
+
                     // 如果所有任务都完成、失败、停止中或已停止，但如果有任务正在停止中，继续轮询
-                    const allDone = data.tasks.every(t => 
+                    const allDone = data.tasks.every(t =>
                         t.status === 'completed' || t.status === 'failed' || t.status === 'stopped'
                     );
                     const hasStopping = data.tasks.some(t => t.status === 'stopping');
-                    
+
                     // 只有所有任务都完成且没有正在停止的任务时，才停止轮询
                     if (allDone && !hasStopping && data.tasks.length > 0) {
                         clearInterval(pollInterval);
@@ -1090,18 +1054,18 @@
         function renderTasks() {
             const container = document.getElementById('tasksList');
             const taskList = Object.values(tasks);
-            
+
             if (taskList.length === 0) {
                 container.innerHTML = '<div class="empty-state">暂无任务</div>';
                 return;
             }
-            
+
             // 按创建时间倒序排列
             taskList.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-            
+
             container.innerHTML = taskList.map(task => {
                 const statusText = getStatusText(task.status);
-                
+
                 // 停止按钮（只在进行中的任务显示，停止中的任务不显示）
                 let stopButtonHtml = '';
                 if ((task.status === 'downloading' || task.status === 'summarizing') && task.status !== 'stopping') {
@@ -1112,7 +1076,7 @@
                         </button>
                     `;
                 }
-                
+
                 // 如果任务完成，显示生成的文件列表
                 let filesHtml = '';
                 if (task.status === 'completed' && task.files) {
@@ -1134,7 +1098,7 @@
                         </div>
                     `;
                 }
-                
+
                 return `
                     <div class="task-item ${task.status}">
                         <div class="task-url">${escapeHtml(task.url)}</div>
@@ -1149,7 +1113,7 @@
                 `;
             }).join('');
         }
-        
+
         // 从完整路径中提取文件名
         function getFileName(path) {
             if (!path) return '';
@@ -1175,14 +1139,14 @@
             if (!confirm('确定要停止这个任务吗？')) {
                 return;
             }
-            
+
             try {
                 const response = await fetch(`/api/tasks/${taskId}/stop`, {
                     method: 'POST'
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     // 立即刷新任务列表，不显示顶部提示
                     // 停止状态会直接在任务列表中显示
@@ -1198,11 +1162,11 @@
         // 显示提示信息
         function showAlert(containerId, message, type) {
             const container = document.getElementById(containerId);
-            const alertClass = type === 'error' ? 'alert-error' : 
-                              type === 'warning' ? 'alert-warning' : 'alert-success';
-            
+            const alertClass = type === 'error' ? 'alert-error' :
+                type === 'warning' ? 'alert-warning' : 'alert-success';
+
             container.innerHTML = `<div class="alert ${alertClass}">${message}</div>`;
-            
+
             if (type === 'success') {
                 setTimeout(() => {
                     container.innerHTML = '';
@@ -1218,12 +1182,12 @@
         }
 
         // 点击模态框外部关闭
-        document.getElementById('modelModal').addEventListener('click', function(e) {
+        document.getElementById('modelModal').addEventListener('click', function (e) {
             if (e.target === this) {
                 hideModelModal();
             }
         });
     </script>
 </body>
-</html>
 
+</html>
