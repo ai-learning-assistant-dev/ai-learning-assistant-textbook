@@ -10,6 +10,7 @@ import json
 import uuid
 import time
 import threading
+import shutil
 from pathlib import Path
 from datetime import datetime
 from queue import Queue
@@ -21,15 +22,16 @@ from bilibili_subtitle_downloader import BilibiliSubtitleDownloader, load_cookie
 from process_video_info import sanitize_filename
 from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
+from define import create_empty_course
 
 # 确定模板目录
 if getattr(sys, 'frozen', False):
     # 如果是PyInstaller打包环境
     template_folder = os.path.join(sys._MEIPASS, 'templates')
-    static_folder = os.path.join(sys._MEIPASS, 'static')
-    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+    static_folder = os.path.join(sys._MEIPASS, 'templates')  # 静态文件也在templates目录
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder, static_url_path='')
 else:
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='templates', static_url_path='')
 
 app.config['JSON_AS_ASCII'] = False  # 支持中文JSON
 
@@ -85,6 +87,7 @@ def load_app_config():
     default_config = {
         'output_directory': 'subtitles',
         'last_selected_model': '',
+        'last_workspace_name': '',
         'cookies_file': 'cookies.txt',
         'auto_refresh_interval': 2000,
         'web_port': 5000,
@@ -119,6 +122,30 @@ def save_app_config(config):
         json.dump(config, f, ensure_ascii=False, indent=2)
 
 
+def load_workspaces():
+    """加载工作区配置"""
+    config_file = 'config/workspace.json'
+    if not os.path.exists(config_file):
+        return []
+    
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get('workspaces', [])
+    except Exception as e:
+        print(f"加载工作区配置失败: {e}")
+        return []
+
+
+def save_workspaces(workspaces):
+    """保存工作区配置"""
+    config_file = 'config/workspace.json'
+    os.makedirs(os.path.dirname(config_file), exist_ok=True)
+    
+    with open(config_file, 'w', encoding='utf-8') as f:
+        json.dump({'workspaces': workspaces}, f, ensure_ascii=False, indent=2)
+
+
 def start_worker_threads():
     """启动工作线程池（确保只启动一次）"""
     global worker_threads_started
@@ -140,6 +167,157 @@ def start_worker_threads():
         print(f"✅ 工作线程池已启动（{max_concurrent} 个线程）")
 
 
+def save_sections_to_json(video_dir, video_url, all_generated_files):
+    """
+    将生成的内容保存为 Section JSON 格式
+    
+    Args:
+        video_dir: 视频数据目录（.../data）
+        video_url: 视频URL
+        all_generated_files: 所有生成的文件信息列表
+    """
+    import math
+    
+    # video_dir 指向 .../data 目录，section.json 文件在上一级目录
+    parent_dir = os.path.dirname(video_dir)
+    section_file_name = os.path.join(parent_dir, 'section.json')
+    
+    # 读取或初始化 sections 列表
+    if os.path.exists(section_file_name):
+        with open(section_file_name, 'r', encoding='utf-8') as f:
+            sections_data = json.load(f)
+    else:
+        sections_data = []
+    
+    # 尝试读取视频信息获取时长
+    video_info = None
+    video_info_files = [f for f in os.listdir(video_dir) if f.endswith('_video_info.json')]
+    if video_info_files:
+        video_info_path = os.path.join(video_dir, video_info_files[0])
+        try:
+            with open(video_info_path, 'r', encoding='utf-8') as f:
+                video_info = json.load(f)
+        except Exception as e:
+            print(f"警告: 无法读取视频信息文件: {e}")
+    
+    # 为每个字幕文件创建一个 Section 对象
+    for file_data in all_generated_files:
+        subtitle_title = file_data['subtitle_title']
+        
+        # 读取练习题和预设问题
+        exercises_file = file_data.get('exercises')
+        questions_file = file_data.get('questions')
+        
+        # 解析练习题
+        exercises_list = []
+        if exercises_file and os.path.exists(exercises_file):
+            with open(exercises_file, 'r', encoding='utf-8') as f:
+                exercises_json = json.load(f)
+                
+            # 处理多选题/单选题
+            for mc in exercises_json.get("multiple_choice", []):
+                options_dict = mc.get("options", {})
+                correct_answer = mc.get("correct_answer", "")
+                
+                # 转换选项格式
+                options_list = []
+                for key in sorted(options_dict.keys()):
+                    options_list.append({
+                        "id": uuid.uuid4().hex,
+                        "text": options_dict[key],
+                        "is_correct": key in correct_answer
+                    })
+                
+                # 判断题型
+                question_type = "单选" if len(correct_answer) == 1 else "多选"
+                
+                exercises_list.append({
+                    "id": uuid.uuid4().hex,
+                    "question": mc.get("question", ""),
+                    "score": 5,
+                    "type": question_type,
+                    "options": options_list
+                })
+            
+            # 处理简答题
+            for sa in exercises_json.get("short_answer", []):
+                reference = sa.get("reference_answer", "")
+                if not reference:
+                    answer_points = sa.get("answer_points", [])
+                    reference = "\n".join(answer_points)
+                
+                exercises_list.append({
+                    "id": uuid.uuid4().hex,
+                    "question": sa.get("question", ""),
+                    "score": 15,
+                    "type": "简答",
+                    "options": []
+                })
+        
+        # 解析预设问题（引导性问题）
+        leading_questions_list = []
+        if questions_file and os.path.exists(questions_file):
+            with open(questions_file, 'r', encoding='utf-8') as f:
+                questions_json = json.load(f)
+                for q in questions_json.get("questions", []):
+                    leading_questions_list.append({
+                        "id": uuid.uuid4().hex,
+                        "question": q.get("question", "")
+                    })
+        
+        # 获取视频时长（转换为分钟）
+        estimated_time = 0
+        if video_info:
+            # 尝试从 video_info 获取时长
+            duration_sec = video_info.get('duration', 0)
+            
+            # 如果是多P视频，尝试匹配对应的分P时长
+            pages = video_info.get('pages', [])
+            if pages:
+                for page in pages:
+                    page_title = page.get('part', '')
+                    # 尝试匹配标题（去掉可能的前缀）
+                    if page_title and page_title in subtitle_title:
+                        duration_sec = page.get('duration', 0)
+                        break
+            
+            # 转换为分钟（向上取整）
+            if duration_sec > 0:
+                estimated_time = math.ceil(duration_sec / 60)
+        
+        # 检查是否已存在同名的 section（通过 title 判断）
+        existing_section = None
+        for section in sections_data:
+            if section.get('title') == subtitle_title:
+                existing_section = section
+                break
+        
+        if existing_section:
+            # 更新现有 section
+            existing_section['exercises'] = exercises_list
+            existing_section['leading_questions'] = leading_questions_list
+            existing_section['video_url'] = video_url
+            existing_section['estimated_time'] = estimated_time
+        else:
+            # 创建新的 section
+            section_obj = {
+                "id": uuid.uuid4().hex,
+                "title": subtitle_title,
+                "order": 0,  # 固定为0
+                "estimated_time": estimated_time,  # 使用视频时长（分钟）
+                "video_url": video_url,
+                "leading_questions": leading_questions_list,
+                "exercises": exercises_list
+            }
+            sections_data.append(section_obj)
+    
+    # 保存 section.json
+    with open(section_file_name, 'w', encoding='utf-8') as f:
+        json.dump(sections_data, f, ensure_ascii=False, indent=2)
+    
+    print(f"✅ Section数据已保存到: {section_file_name}")
+
+
 def task_queue_worker():
     """任务队列工作线程：从队列中取任务并执行"""
     thread_name = threading.current_thread().name
@@ -158,7 +336,7 @@ def task_queue_worker():
             output_dir = task_data['output_dir']
             model_name = task_data['model_name']
             cookies_file = task_data['cookies_file']
-            custom_folder_name = task_data.get('custom_folder_name')
+            custom_folder_name = None
             download_all_parts = task_data.get('download_all_parts', False)
             generate_options = task_data.get('generate_options')
             
@@ -427,36 +605,12 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
                 'exercises': exercises_file,
                 'questions': questions_file
             })
-        # 5. 将生成的数据写入 Excel
+        # 5. 将生成的数据写入 JSON
         with tasks_lock:
-            tasks[task_id]['message'] = f'正在写入Excel: {video_title}...'
+            tasks[task_id]['message'] = f'正在写入Section数据: {video_title}...'
         
-        # video_dir 指向 .../data 目录，Excel 文件实际上在上一级目录
-        # 正确的逻辑应该是去找父目录下的 .xlsx 文件
-        parent_dir = os.path.dirname(video_dir)
-        # 尝试几种可能的命名方式
-        possible_names = [
-            f"{os.path.basename(parent_dir)}.xlsx",
-            f"{sanitize_filename(video_title)}.xlsx"
-        ]
+        save_sections_to_json(video_dir, url, all_generated_files)
         
-        excel_found = False
-        for name in possible_names:
-            excel_path = os.path.join(parent_dir, name)
-            if os.path.exists(excel_path):
-                save_data_to_excel(excel_path)
-                excel_found = True
-                break
-        
-        if not excel_found:
-            print(f"警告: Excel 文件未找到，尝试了: {possible_names}")
-            # 如果没找到，尝试在 video_dir (即 data 目录) 下找找看，虽然这不应该发生
-            excel_path_fallback = os.path.join(video_dir, f"{os.path.basename(video_dir)}.xlsx")
-            if os.path.exists(excel_path_fallback):
-                 save_data_to_excel(excel_path_fallback)
-            else:
-                 with tasks_lock:
-                     tasks[task_id]['message'] += ' (Excel写入失败: 文件未找到)'
 
         # 更新任务状态为完成
         with tasks_lock:
@@ -579,6 +733,163 @@ def delete_model(model_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/workspace', methods=['POST'])
+def create_workspace():
+    """创建工作区"""
+    try:
+        data = request.json
+        name = data.get('name', '').strip()
+        path = str(Path(data.get('path', '').strip()))
+        
+        if not name:
+            return jsonify({
+                'success': False,
+                'error': '工作区名称不能为空'
+            }), 400
+        
+        if not path:
+            return jsonify({
+                'success': False,
+                'error': '工作区路径不能为空'
+            }), 400
+        
+        # 加载现有工作区
+        workspaces = load_workspaces()
+        
+        # 检查名称是否重复
+        for ws in workspaces:
+            if ws.get('name') == name:
+                return jsonify({
+                    'success': False,
+                    'error': f'工作区名称 "{name}" 已存在'
+                }), 400
+        
+        # 构建完整路径
+        full_path = os.path.abspath(path)
+        
+        # 检查路径是否已存在
+        if os.path.exists(full_path):
+            return jsonify({
+                'success': False,
+                'error': f'路径 "{path}" 已存在'
+            }), 400
+        
+        # 创建文件夹
+        try:
+            os.makedirs(full_path, exist_ok=False)
+        except OSError as e:
+            return jsonify({
+                'success': False,
+                'error': f'创建文件夹失败: {str(e)}'
+            }), 500
+        
+        # 创建 course.json 文件
+        try:
+            course_data = create_empty_course(title=name)
+            course_file_path = os.path.join(full_path, 'course.json')
+            with open(course_file_path, 'w', encoding='utf-8') as f:
+                json.dump(course_data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            # 如果创建 course.json 失败，清理已创建的文件夹
+            try:
+                os.rmdir(full_path)
+            except:
+                pass
+            return jsonify({
+                'success': False,
+                'error': f'创建课程文件失败: {str(e)}'
+            }), 500
+        
+        # 添加新工作区
+        new_workspace = {
+            'name': name,
+            'path': path,
+            'created_at': datetime.now().isoformat()
+        }
+        workspaces.append(new_workspace)
+        
+        # 保存到文件
+        save_workspaces(workspaces)
+        
+        return jsonify({
+            'success': True,
+            'workspace': new_workspace,
+            'full_path': full_path
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/workspace', methods=['GET'])
+def list_workspaces():
+    """获取所有工作区列表"""
+    try:
+        workspaces = load_workspaces()
+        return jsonify({
+            'success': True,
+            'workspaces': workspaces
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/workspace/<workspace_name>', methods=['DELETE'])
+def delete_workspace(workspace_name):
+    """删除工作区"""
+    try:
+        # 加载现有工作区
+        workspaces = load_workspaces()
+        
+        # 查找要删除的工作区
+        target_workspace = None
+        for ws in workspaces:
+            if ws.get('name') == workspace_name:
+                target_workspace = ws
+                break
+        
+        if not target_workspace:
+            return jsonify({
+                'success': False,
+                'error': f'工作区 "{workspace_name}" 不存在'
+            }), 404
+        
+        # 获取工作区路径
+        workspace_path = target_workspace.get('path')
+        full_path = os.path.abspath(workspace_path)
+        
+        # 删除文件夹（如果存在）
+        if os.path.exists(full_path):
+            try:
+                shutil.rmtree(full_path)
+            except OSError as e:
+                return jsonify({
+                    'success': False,
+                    'error': f'删除文件夹失败: {str(e)}'
+                }), 500
+        
+        # 从列表中删除工作区
+        workspaces = [ws for ws in workspaces if ws.get('name') != workspace_name]
+        
+        # 保存到文件
+        save_workspaces(workspaces)
+        
+        return jsonify({
+            'success': True,
+            'message': f'工作区 "{workspace_name}" 已删除',
+            'deleted_path': full_path
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 
 @app.route('/api/tasks', methods=['POST'])
 def create_tasks():
@@ -589,10 +900,21 @@ def create_tasks():
         
         data = request.json
         urls = data.get('urls', [])
-        output_dir = data.get('output_dir', 'subtitles')
+        workspace_name = data.get('workspace_name')
+        output_dir = None
+        for ws in load_workspaces():
+            if ws.get('name') == workspace_name:
+                output_dir = ws.get('path')
+                break
+
+        if output_dir is None:
+            return jsonify({
+                'success': False,
+                'error': '工作区不存在'
+            }), 400
+            
         model_name = data.get('model_name')
         cookies_file = data.get('cookies_file', 'cookies.txt')
-        custom_folder_name = data.get('custom_folder_name', '').strip() or None
         download_all_parts = data.get('download_all_parts', False)
         generate_options = data.get('generate_options', {
             'summary': True,
@@ -615,7 +937,7 @@ def create_tasks():
         
         # 保存配置：最后使用的输出目录和模型
         config = load_app_config()
-        config['output_directory'] = output_dir
+        config['last_workspace_name'] = workspace_name
         config['last_selected_model'] = model_name
         save_app_config(config)
         
@@ -686,7 +1008,6 @@ def create_tasks():
                 'output_dir': output_dir,
                 'model_name': model_name,
                 'cookies_file': cookies_file,
-                'custom_folder_name': custom_folder_name,
                 'download_all_parts': download_all_parts,
                 'generate_options': generate_options
             }
@@ -695,7 +1016,7 @@ def create_tasks():
             task_ids.append(task_id)
         
         # 获取当前配置的并发数
-        config = load_app_config()
+        config = load_app_config() 
         max_concurrent = config.get('max_concurrent_tasks', MAX_CONCURRENT_TASKS)
         
         return jsonify({
@@ -844,6 +1165,126 @@ def update_app_config():
         return jsonify({
             'success': True,
             'config': config
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/course/<workspace_name>', methods=['GET'])
+def get_course_with_sections(workspace_name):
+    """获取指定工作区的course.json和所有section.json文件"""
+    try:
+        # 查找工作区
+        workspaces = load_workspaces()
+        workspace = None
+        for ws in workspaces:
+            if ws.get('name') == workspace_name:
+                workspace = ws
+                break
+        
+        if not workspace:
+            return jsonify({
+                'success': False,
+                'error': f'工作区 "{workspace_name}" 不存在'
+            }), 404
+        
+        workspace_path = os.path.abspath(workspace.get('path'))
+        
+        # 检查工作区目录是否存在
+        if not os.path.exists(workspace_path):
+            return jsonify({
+                'success': False,
+                'error': f'工作区路径 "{workspace_path}" 不存在'
+            }), 404
+        
+        # 读取course.json
+        course_file = os.path.join(workspace_path, 'course.json')
+        if not os.path.exists(course_file):
+            return jsonify({
+                'success': False,
+                'error': 'course.json 文件不存在'
+            }), 404
+        
+        with open(course_file, 'r', encoding='utf-8') as f:
+            course_data = json.load(f)
+        
+        # 查找所有section.json文件
+        sections = []
+        for root, dirs, files in os.walk(workspace_path):
+            if 'section.json' in files:
+                section_file = os.path.join(root, 'section.json')
+                try:
+                    with open(section_file, 'r', encoding='utf-8') as f:
+                        section_data = json.load(f)
+                        # section.json包含的是数组，将数组元素直接添加到sections中
+                        if isinstance(section_data, list):
+                            sections.extend(section_data)
+                        else:
+                            # 如果不是数组，作为单个元素添加
+                            sections.append(section_data)
+                except Exception as e:
+                    print(f"读取section.json文件失败: {section_file}, 错误: {e}")
+        
+        return jsonify({
+            'success': True,
+            'course': course_data,
+            'sections': sections
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/course/<workspace_name>', methods=['POST'])
+def save_course(workspace_name):
+    """保存course.json文件（覆盖原有文件）"""
+    try:
+        # 查找工作区
+        workspaces = load_workspaces()
+        workspace = None
+        for ws in workspaces:
+            if ws.get('name') == workspace_name:
+                workspace = ws
+                break
+        
+        if not workspace:
+            return jsonify({
+                'success': False,
+                'error': f'工作区 "{workspace_name}" 不存在'
+            }), 404
+        
+        workspace_path = os.path.abspath(workspace.get('path'))
+        
+        # 检查工作区目录是否存在
+        if not os.path.exists(workspace_path):
+            return jsonify({
+                'success': False,
+                'error': f'工作区路径 "{workspace_path}" 不存在'
+            }), 404
+        
+        # 获取前端提交的course数据
+        data = request.json
+        course_data = data.get('course')
+        
+        if not course_data:
+            return jsonify({
+                'success': False,
+                'error': '缺少course数据'
+            }), 400
+        
+        # 保存course.json文件（覆盖原有文件）
+        course_file = os.path.join(workspace_path, 'course.json')
+        with open(course_file, 'w', encoding='utf-8') as f:
+            json.dump(course_data, f, ensure_ascii=False, indent=2)
+        
+        return jsonify({
+            'success': True,
+            'message': 'course.json 已成功保存'
         })
     except Exception as e:
         return jsonify({

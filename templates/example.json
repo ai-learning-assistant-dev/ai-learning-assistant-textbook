@@ -1,0 +1,43 @@
+{
+    "id": "uuidv4",
+    "title": "",
+    "description": "",
+    "chapters": [
+        {
+            "id": "uuidv4",
+            "title": "",
+            "order": 0,
+            "sections": [
+                {
+                    "id": "uuidv4",
+                    "title": "",
+                    "order": 0,
+                    "estimated_time": 0,
+                    "video_url": "",
+                    "leading_questions": [
+                        {
+                            "id": "uuidv4",
+                            "question": ""
+                        }
+                    ],
+                    "exercises": [
+                        {
+                            "id": "uuidv4",
+                            "question": "",
+                            "score": 0,
+                            "type": "单选/简答",
+                            "options": [
+                                {
+                                    "id": "uuidv4",
+                                    "text": "",
+                                    "is_correct": true
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+

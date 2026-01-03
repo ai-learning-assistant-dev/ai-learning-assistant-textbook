@@ -44,6 +44,7 @@ env/
 cookies.txt
 config/llm_models.json
 config/app_config.json
+config/workspace.json
 subtitles/
 !subtitles/.gitkeep
 release/
