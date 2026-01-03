@@ -28,10 +28,10 @@ from define import create_empty_course
 if getattr(sys, 'frozen', False):
     # 如果是PyInstaller打包环境
     template_folder = os.path.join(sys._MEIPASS, 'templates')
-    static_folder = os.path.join(sys._MEIPASS, 'static')
-    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder)
+    static_folder = os.path.join(sys._MEIPASS, 'templates')  # 静态文件也在templates目录
+    app = Flask(__name__, template_folder=template_folder, static_folder=static_folder, static_url_path='')
 else:
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='templates', static_url_path='')
 
 app.config['JSON_AS_ASCII'] = False  # 支持中文JSON
 
