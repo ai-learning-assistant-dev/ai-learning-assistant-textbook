@@ -9,8 +9,10 @@ dependencies = [
     "flask>=2.3.0",
     "modelscope>=1.11.0",
     "openpyxl>=3.1.5",
+    "psycopg2-binary>=2.9.11",
     "pyinstaller>=5.13.0",
     "requests>=2.31.0",
+    "sqlalchemy>=2.0.45",
     "yt-dlp>=2023.12.30",
 ]
 

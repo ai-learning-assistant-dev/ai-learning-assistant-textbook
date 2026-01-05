@@ -207,6 +207,9 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
         # 读取练习题和预设问题
         exercises_file = file_data.get('exercises')
         questions_file = file_data.get('questions')
+        summary_file = file_data.get('summary')
+        content_md_file = file_data.get('content_md')
+        subtitle_file = file_data.get('subtitle_file')
         
         # 解析练习题
         exercises_list = []
@@ -265,6 +268,67 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                         "question": q.get("question", "")
                     })
         
+        # 读取知识点总结
+        knowledge_points = {}
+        if summary_file and os.path.exists(summary_file):
+            try:
+                with open(summary_file, 'r', encoding='utf-8') as f:
+                    knowledge_points = json.load(f)
+            except Exception as e:
+                print(f"警告: 无法读取总结文件 {summary_file}: {e}")
+                knowledge_points = {}
+        
+        # 读取完整内容文档
+        knowledge_content = ""
+        if content_md_file and os.path.exists(content_md_file):
+            try:
+                with open(content_md_file, 'r', encoding='utf-8') as f:
+                    knowledge_content = f.read()
+            except Exception as e:
+                print(f"警告: 无法读取Markdown文件 {content_md_file}: {e}")
+                knowledge_content = ""
+        
+        # 读取并解析SRT字幕文件
+        video_subtitles = []
+        if subtitle_file and os.path.exists(subtitle_file):
+            try:
+                import re
+                with open(subtitle_file, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                # 按空行分割字幕块
+                blocks = re.split(r'\n\s*\n', content.strip())
+                
+                for block in blocks:
+                    lines = block.strip().split('\n')
+                    if len(lines) < 3:
+                        continue
+                    
+                    # 第一行是序号
+                    index = lines[0].strip()
+                    
+                    # 第二行是时间轴
+                    time_line = lines[1].strip()
+                    time_match = re.match(r'(\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2},\d{3})', time_line)
+                    if not time_match:
+                        continue
+                    
+                    time_start = time_match.group(1)
+                    time_end = time_match.group(2)
+                    
+                    # 剩余行是字幕内容
+                    text_content = '\n'.join(lines[2:])
+                    
+                    video_subtitles.append({
+                        'seq': int(index) if index.isdigit() else len(video_subtitles) + 1,
+                        'start': time_start,
+                        'end': time_end,
+                        'text': text_content
+                    })
+            except Exception as e:
+                print(f"警告: 无法读取字幕文件 {subtitle_file}: {e}")
+                video_subtitles = []
+        
         # 获取视频时长（转换为分钟）
         estimated_time = 0
         if video_info:
@@ -298,6 +362,9 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
             existing_section['leading_questions'] = leading_questions_list
             existing_section['video_url'] = video_url
             existing_section['estimated_time'] = estimated_time
+            existing_section['knowledge_points'] = knowledge_points
+            existing_section['knowledge_content'] = knowledge_content
+            existing_section['video_subtitles'] = video_subtitles
         else:
             # 创建新的 section
             section_obj = {
@@ -307,7 +374,10 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                 "estimated_time": estimated_time,  # 使用视频时长（分钟）
                 "video_url": video_url,
                 "leading_questions": leading_questions_list,
-                "exercises": exercises_list
+                "exercises": exercises_list,
+                "knowledge_points": knowledge_points,
+                "knowledge_content": knowledge_content,
+                "video_subtitles": video_subtitles
             }
             sections_data.append(section_obj)
     
@@ -600,7 +670,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             all_generated_files.append({
                 'subtitle_title': subtitle_title,
                 'subtitle_file': subtitle_file,
-                'summary_json': summary_json_file,
+                'summary': summary_json_file,
                 'content_md': full_content_file,
                 'exercises': exercises_file,
                 'questions': questions_file
