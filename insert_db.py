@@ -43,7 +43,7 @@ class Section(Base):
     knowledge_points = Column(JSON)
     video_subtitles = Column(JSON)
     srt_path = Column(String(512))
-    knowledge_content = Column(JSON)
+    knowledge_content = Column(Text)
     estimated_time = Column(Integer)
     section_order = Column(Integer, nullable=False)
     
@@ -111,8 +111,9 @@ def import_course_from_json(json_file_path, db_url):
         course = Course(
             course_id=uuid.UUID(data['id']),
             name=data['title'],
-            icon_url='',  # JSON中没有此字段，使用默认值
-            description=data.get('description', '')
+            icon_url=data.get('icon_url', ''),
+            description=data.get('description', ''),
+            default_ai_persona_id=uuid.UUID(data['default_ai_persona_id']) if data.get('default_ai_persona_id') else None
         )
         
         # 处理章节
@@ -128,18 +129,32 @@ def import_course_from_json(json_file_path, db_url):
                 section = Section(
                     section_id=uuid.UUID(section_data['id']),
                     title=section_data['title'],
-                    video_url=section_data.get('video_url'),
-                    estimated_time=section_data.get('estimated_time'),
-                    section_order=section_data['order']
+                    video_url=section_data.get('video_url', ''),
+                    estimated_time=section_data.get('estimated_time', 0),
+                    section_order=section_data['order'],
+                    knowledge_points=section_data.get('knowledge_points', {}),
+                    video_subtitles=section_data.get('video_subtitles', []),
+                    knowledge_content=section_data.get('knowledge_content', ''),
+                    srt_path=section_data.get('srt_path', '')
                 )
                 
                 # 处理练习题
                 for exercise_data in section_data.get('exercises', []):
+                    type_status = '0'
+                    match exercise_data['type']:
+                        case '单选':
+                            type_status = '0'
+                        case '多选':
+                            type_status = '1'
+                        case '简答':
+                            type_status = '2'
                     exercise = Exercise(
                         exercise_id=uuid.UUID(exercise_data['id']),
                         question=exercise_data['question'],
-                        type_status=exercise_data['type'],
-                        score=exercise_data.get('score', 1)
+                        type_status=type_status,
+                        score=exercise_data.get('score', 1),
+                        answer=exercise_data.get('answer', None),
+                        image=exercise_data.get('image', None)
                     )
                     
                     # 处理选项
@@ -147,7 +162,8 @@ def import_course_from_json(json_file_path, db_url):
                         option = ExerciseOption(
                             option_id=uuid.UUID(option_data['id']),
                             option_text=option_data['text'],
-                            is_correct=option_data['is_correct']
+                            is_correct=option_data['is_correct'],
+                            image=option_data.get('image', '')
                         )
                         exercise.options.append(option)
                     
@@ -188,19 +204,32 @@ def import_course_from_json(json_file_path, db_url):
 
 
 if __name__ == '__main__':
-    # 配置数据库连接
-    # 格式: postgresql://用户名:密码@主机:端口/数据库名
-    DB_URL = 'postgresql://postgres:your_password@localhost:5432/your_database'
+    # ==================== 数据库配置 ====================
+    # 请在这里直接修改你的数据库连接信息
+    DB_HOST = 'localhost'        # 数据库主机
+    DB_PORT = '5432'             # 数据库端口
+    DB_NAME = 'ai_learning_assistant'  # 数据库名称
+    DB_USER = 'postgres'         # 数据库用户名
+    DB_PASSWORD = 'KLNb923u4_odfh89'  # 数据库密码（请修改）
     
     # JSON文件路径
     JSON_FILE = 'subtitles/计算机网络/course.json'
+    # ==================================================
+    
+    # 构建数据库连接URL
+    DB_URL = f'postgresql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}'
     
     # 执行导入
     print("开始导入课程数据...")
+    print(f"数据库: {DB_HOST}:{DB_PORT}/{DB_NAME}")
+    print(f"用户: {DB_USER}")
+    print(f"文件: {JSON_FILE}\n")
+    
     success = import_course_from_json(JSON_FILE, DB_URL)
     
     if success:
-        print("✓ 导入完成！")
+        print("\n✓ 导入完成！")
     else:
-        print("✗ 导入失败，请检查错误信息")
+        print("\n✗ 导入失败，请检查错误信息")
+
 
