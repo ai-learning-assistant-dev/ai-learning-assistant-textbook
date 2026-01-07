@@ -620,7 +620,7 @@ class BilibiliSubtitleDownloader:
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
     def download(self, video_url: str, video_index: str = "1", output_dir: str = 'subtitles',
-                 format_type: str = 'srt', language: Optional[str] = 'ai-zh',
+                 format_type: str = 'srt', language: Optional[str] = None,
                  download_cover: bool = True, custom_folder_name: Optional[str] = None,
                  download_all_parts: bool = False) -> Dict[str, any]:
         """
