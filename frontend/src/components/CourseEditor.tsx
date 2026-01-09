@@ -722,12 +722,14 @@ const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove
           className="w-full px-2 py-1 border border-gray-300 rounded"
         />
         <div className="flex gap-2">
-          <input
-            type="number"
-            {...register(`${activePath}.exercises.${index}.score`, { valueAsNumber: true })}
-            placeholder="分值"
-            className="w-24 px-2 py-1 border border-gray-300 rounded"
-          />
+          <div className="flex items-center gap-1">
+            <label className="text-sm text-gray-700">分值:</label>
+            <input
+              type="number"
+              {...register(`${activePath}.exercises.${index}.score`, { valueAsNumber: true })}
+              className="w-20 px-2 py-1 border border-gray-300 rounded"
+            />
+          </div>
           <select
             {...register(`${activePath}.exercises.${index}.type`)}
             className="flex-1 px-2 py-1 border border-gray-300 rounded"
