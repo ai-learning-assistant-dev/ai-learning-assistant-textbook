@@ -1,0 +1,52 @@
+{
+    "id": "uuidv4",
+    "title": "计算机原理通识",
+    "description": "计算机原理通识课程，适合初学者学习",
+    "chapters": [
+        {
+            "id": "uuidv4",
+            "title": "计算机组成硬件",
+            "order": 0,
+            "sections": [
+                {
+                    "id": "uuidv4",
+                    "title": "家用计算机硬件组成",
+                    "order": 0,
+                    "estimated_time": 0,
+                    "video_url": "",
+                    "leading_questions": [
+                        {
+                            "id": "uuidv4",
+                            "question": "家用计算机硬件组成有哪些？"
+                        }
+                    ],
+                    "exercises": [
+                        {
+                            "id": "uuidv4",
+                            "question": "以下哪个硬件是专门负责图形显示的？",
+                            "score": 5,
+                            "type": "单选",
+                            "options": [
+                                {
+                                    "id": "uuidv4",
+                                    "text": "显卡",
+                                    "is_correct": true
+                                },
+                                {
+                                    "id": "uuidv4",
+                                    "text": "主板",
+                                    "is_correct": false
+                                },
+                                {
+                                    "id": "uuidv4",
+                                    "text": "内存",
+                                    "is_correct": false
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}

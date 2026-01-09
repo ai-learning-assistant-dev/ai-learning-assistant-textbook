@@ -60,3 +60,10 @@ desktop.ini
 # 临时文件
 *.tmp
 *.temp
+
+#前端构建
+frontend/logs
+frontend/node_modules
+frontend/dist
+frontend/dist-ssr
+frontend/*.local
