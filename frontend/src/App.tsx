@@ -4,6 +4,7 @@ import WorkspaceConfig from './components/WorkspaceConfig';
 import TaskConfig from './components/TaskConfig';
 import TaskList from './components/TaskList';
 import CourseEditor from './components/CourseEditor';
+import CookieConfig from './components/CookieConfig'; 
 import {
   Model,
   Task,
@@ -34,6 +35,7 @@ function App() {
   const [taskAlert, setTaskAlert] = useState<AlertProps | null>(null);
   const [pollInterval, setPollInterval] = useState<number | null>(null);
   const [courseData, setCourseData] = useState<CourseData | null>(null);
+  const [isPollingActive, setIsPollingActive] = useState<boolean>(false);
 
   // 加载应用配置
   const loadAppConfig = useCallback(async () => {
@@ -253,34 +255,48 @@ function App() {
         });
         setTasks(tasksMap);
 
-        // 如果所有任务都完成、失败、停止中或已停止，停止轮询
-        const allDone = data.tasks.every(
-          (t) => t.status === 'completed' || t.status === 'failed' || t.status === 'stopped'
+        // 检查是否还有活跃任务（非完成、失败或已停止状态的任务）
+        const activeTasks = data.tasks.filter(
+          (t) => !['completed', 'failed', 'stopped'].includes(t.status)
         );
-        const hasStopping = data.tasks.some((t) => t.status === 'stopping');
 
-        if (allDone && !hasStopping && data.tasks.length > 0) {
-          if (pollInterval) {
-            clearInterval(pollInterval);
-            setPollInterval(null);
-          }
+        // 如果没有活跃任务，停止轮询
+        if (activeTasks.length === 0 && isPollingActive) {
+          console.log("停止轮询：没有活跃任务");
+          stopPolling(); // 使用新的停止轮询函数
         }
       }
     } catch (error) {
       console.error('加载任务失败:', error);
+      // 如果请求失败，停止轮询以避免错误循环
+      if (isPollingActive) {
+        console.log("因错误停止轮询");
+        stopPolling(); // 使用新的停止轮询函数
+      }
     }
+  }, [isPollingActive]); // 更新依赖项
+
+  // 新增停止轮询函数
+  const stopPolling = useCallback(() => {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      setPollInterval(null);
+    }
+    setIsPollingActive(false);
   }, [pollInterval]);
 
   // 开始轮询任务状态
   const startPolling = useCallback(() => {
-    if (pollInterval) {
-      clearInterval(pollInterval);
+    // 如果已经在轮询，则不重复开始
+    if (isPollingActive) {
+      return;
     }
 
     loadTasks(); // 立即加载一次
-    const interval = setInterval(loadTasks, 2000); // 每2秒刷新
+    const interval = window.setInterval(loadTasks, 2000); // 使用window.setInterval明确指定使用浏览器API
     setPollInterval(interval);
-  }, [loadTasks, pollInterval]);
+    setIsPollingActive(true);
+  }, [loadTasks, isPollingActive]);
 
   // 处理任务提交
   const handleTaskSubmit = useCallback(
@@ -366,6 +382,7 @@ function App() {
   useEffect(() => {
     return () => {
       if (pollInterval) {
+        console.log("清理轮询定时器");
         clearInterval(pollInterval);
       }
     };
@@ -451,6 +468,13 @@ function App() {
                     alert={workspaceAlert}
                     appConfig={appConfig}
                     onWorkspacesChange={loadWorkspaces}
+                  />
+                </div>
+
+                {/* 新增Cookie配置卡片 */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <CookieConfig
+                    alert={taskAlert} // 可以复用taskAlert或创建独立的alert状态
                   />
                 </div>
               </div>

@@ -619,6 +619,96 @@ class BilibiliSubtitleDownloader:
         
         return f"{hours:02d}:{minutes:02d}:{secs:02d},{millis:03d}"
     
+    def _save_subtitle_file(self, subtitle_content, page_title, lan, format_type, video_dir):
+        """
+        保存字幕文件的辅助函数
+        
+        Args:
+            subtitle_content: 字幕内容
+            page_title: 页面标题
+            lan: 语言代码
+            format_type: 格式类型 (srt/json/txt)
+            video_dir: 输出目录
+            
+        Returns:
+            输出文件路径，如果保存失败返回None
+        """
+        filename = f"{page_title}_{lan}.{format_type}"
+        output_path = os.path.join(video_dir, filename)
+        
+        # 根据格式保存字幕
+        if format_type == 'srt':
+            self.save_subtitle_as_srt(subtitle_content, output_path)
+        elif format_type == 'json':
+            self.save_subtitle_as_json(subtitle_content, output_path)
+        elif format_type == 'txt':
+            self.save_subtitle_as_txt(subtitle_content, output_path)
+        else:
+            print(f"不支持的格式: {format_type}")
+            return None
+        
+        return output_path
+
+    def _download_single_subtitle(self, sub, page_title, format_type, video_dir):
+        """
+        下载并保存单个字幕文件的辅助函数
+        
+        Args:
+            sub: 字幕信息字典
+            page_title: 页面标题
+            format_type: 格式类型
+            video_dir: 输出目录
+            
+        Returns:
+            输出文件路径，如果下载失败返回None
+        """
+        lan = sub.get('lan', 'unknown')
+        lan_doc = sub.get('lan_doc', lan)
+        subtitle_url = sub.get('subtitle_url')
+        is_ai = sub.get('is_ai', False)
+        
+        if not subtitle_url:
+            print(f"警告: {lan_doc} 字幕URL为空")
+            return None
+        
+        print(f"\n下载 {lan_doc} 字幕...")
+        subtitle_content = self.download_subtitle(subtitle_url, is_ai=is_ai)
+        
+        if not subtitle_content:
+            print(f"错误: 无法下载 {lan_doc} 字幕")
+            return None
+        
+        # 保存字幕文件
+        output_path = self._save_subtitle_file(subtitle_content, page_title, lan, format_type, video_dir)
+        return output_path
+
+    def _download_chinese_subtitle(self, subtitles, page_title, format_type, video_dir):
+        """
+        下载中文字幕，按优先级顺序
+        
+        Args:
+            subtitles: 字幕列表
+            page_title: 页面标题
+            format_type: 格式类型
+            video_dir: 输出目录
+            
+        Returns:
+            成功下载的文件路径列表
+        """
+        # 定义中文语言代码的优先级顺序
+        chinese_priority = ['zh-CN', 'zh-Hans', 'ai-zh']
+        
+        for priority_lan in chinese_priority:
+            for sub in subtitles:
+                lan = sub.get('lan', 'unknown')
+                if lan == priority_lan:
+                    # 找到匹配的字幕，进行下载
+                    output_path = self._download_single_subtitle(sub, page_title, format_type, video_dir)
+                    if output_path:
+                        return [output_path]  # 下载成功后立即返回
+        
+        return []  # 如果没有找到任何中文字幕，返回空列表
+
     def download(self, video_url: str, video_index: str = "1", output_dir: str = 'subtitles',
                  format_type: str = 'srt', language: Optional[str] = None,
                  download_cover: bool = True, custom_folder_name: Optional[str] = None,
@@ -960,46 +1050,33 @@ class BilibiliSubtitleDownloader:
                 print(f"  - {sub.get('lan_doc', sub.get('lan', 'Unknown'))}")
             
             # 下载字幕
-            for sub in subtitles:
-                lan = sub.get('lan', 'unknown')
-                lan_doc = sub.get('lan_doc', lan)
-                subtitle_url = sub.get('subtitle_url')
-                is_ai = sub.get('is_ai', False)
-                
-                # 如果指定了语言，只下载指定语言的字幕
-                if language and lan != language:
-                    continue
-                
-                if not subtitle_url:
-                    print(f"警告: {lan_doc} 字幕URL为空")
-                    continue
-                
-                print(f"\n下载 {lan_doc} 字幕...")
-                subtitle_content = self.download_subtitle(subtitle_url, is_ai=is_ai)
-                
-                if not subtitle_content:
-                    print(f"错误: 无法下载 {lan_doc} 字幕")
-                    continue
-                
-                # 构建输出文件名
-                # 使用统一的 page_title 变量（已经包含了 Px 序号），无需再次 sanitize，因为它已经是安全文件名
-                filename = f"{page_title}_{lan}.{format_type}"
-                
-                output_path = os.path.join(video_dir, filename)
-                
-                # 根据格式保存字幕
-                if format_type == 'srt':
-                    self.save_subtitle_as_srt(subtitle_content, output_path)
-                elif format_type == 'json':
-                    self.save_subtitle_as_json(subtitle_content, output_path)
-                elif format_type == 'txt':
-                    self.save_subtitle_as_txt(subtitle_content, output_path)
+            # 下载字幕
+            downloaded_paths = []
+            
+            if language:
+                # 如果指定了语言，按优先级下载最匹配的字幕
+                if language in ['zh-CN', 'zh', 'zh-Hans']:
+                    # 下载中文字幕
+                    downloaded_paths = self._download_chinese_subtitle(subtitles, page_title, format_type, video_dir)
                 else:
-                    print(f"不支持的格式: {format_type}")
-                    continue
-                
-                # 记录成功下载的文件
-                result['subtitles'].append(output_path)
+                    # 非中文语言，按原逻辑处理
+                    for sub in subtitles:
+                        lan = sub.get('lan', 'unknown')
+                        if lan != language:
+                            continue
+                        
+                        output_path = self._download_single_subtitle(sub, page_title, format_type, video_dir)
+                        if output_path:
+                            downloaded_paths.append(output_path)
+            else:
+                # 没有指定语言，下载所有字幕
+                for sub in subtitles:
+                    output_path = self._download_single_subtitle(sub, page_title, format_type, video_dir)
+                    if output_path:
+                        downloaded_paths.append(output_path)
+            
+            # 更新结果
+            result['subtitles'].extend(downloaded_paths)
         
         return result
 
