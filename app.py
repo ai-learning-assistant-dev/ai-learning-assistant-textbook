@@ -469,6 +469,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             video_index=thread_name,
             output_dir=output_dir,
             format_type='srt',
+            language='zh-CN',
             download_cover=True,
             custom_folder_name=custom_folder_name,
             download_all_parts=download_all_parts
@@ -960,7 +961,125 @@ def delete_workspace(workspace_name):
             'error': str(e)
         }), 500
 
+@app.route('/api/config/cookies', methods=['GET'])
+def get_cookies_config():
+    """获取Cookie配置状态"""
+    try:
+        cookies_file = 'cookies.txt'
+        if not os.path.exists(cookies_file):
+            return jsonify({
+                'success': True,
+                'configured': False,
+                'has_value': False  # 表示是否有配置值
+            })
+        
+        cookies = load_cookies_from_file(cookies_file)
+        has_sessdata = bool(cookies.get('sessdata'))
+        
+        return jsonify({
+            'success': True,
+            'configured': has_sessdata,
+            'has_value': has_sessdata  # 表示是否有配置值，但不直接返回敏感数据
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
+@app.route('/api/config/cookies', methods=['POST'])
+def update_cookies_config():
+    """更新Cookie配置"""
+    try:
+        data = request.json
+        sessdata = data.get('sessdata', '').strip()
+        
+        if not sessdata:
+            return jsonify({
+                'success': False,
+                'error': 'SESSDATA不能为空'
+            })
+
+        # 写入cookies.txt文件
+        with open('cookies.txt', 'w', encoding='utf-8') as f:
+            f.write(f'SESSDATA={sessdata}\n')
+        
+        return jsonify({
+            'success': True,
+            'message': 'Cookie配置已更新'
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/api/test_cookies', methods=['POST'])
+def test_cookies():
+    """测试Cookie是否有效"""
+    try:
+        data = request.json
+        sessdata = data.get('sessdata', '').strip()
+        
+        # 如果传入的是特殊标记，从配置文件读取实际值
+        if sessdata == 'PLACEHOLDER_VALUE_FOR_TEST':
+            cookies_file = 'cookies.txt'
+            if not os.path.exists(cookies_file):
+                return jsonify({
+                    'success': False,
+                    'error': 'Cookie配置文件不存在'
+                })
+            
+            cookies = load_cookies_from_file(cookies_file)
+            sessdata = cookies.get('sessdata', '')
+        
+        if not sessdata:
+            return jsonify({
+                'success': False,
+                'error': 'SESSDATA不能为空'
+            })
+
+        # 创建临时下载器实例进行测试
+        from bilibili_subtitle_downloader import BilibiliSubtitleDownloader
+        downloader = BilibiliSubtitleDownloader(sessdata=sessdata)
+        
+        # 尝试访问一个公开可用的API来测试Cookie有效性
+        import requests
+        test_headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.bilibili.com/',
+            'Cookie': f'SESSDATA={sessdata}'
+        }
+        
+        # 尝试获取用户信息来验证Cookie
+        resp = requests.get('https://api.bilibili.com/x/web-interface/nav', 
+                           headers=test_headers, timeout=10)
+        
+        if resp.status_code == 200:
+            result = resp.json()
+            if result.get('code') == 0:  # 成功
+                uname = result.get('data', {}).get('uname', '未知用户')
+                return jsonify({
+                    'success': True,
+                    'message': f'Cookie验证成功，用户：{uname}'
+                })
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Cookie无效或已过期'
+                })
+        else:
+            return jsonify({
+                'success': False,
+                'error': f'Cookie验证失败，状态码：{resp.status_code}'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Cookie验证异常：{str(e)}'
+        }), 500
 @app.route('/api/tasks', methods=['POST'])
 def create_tasks():
     """创建批量任务"""
@@ -1157,29 +1276,6 @@ def stop_task(task_id):
         return jsonify({
             'success': True,
             'message': '停止信号已发送'
-        })
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-
-@app.route('/api/config/cookies', methods=['GET'])
-def get_cookies_config():
-    """获取Cookie配置"""
-    try:
-        cookies_file = 'cookies.txt'
-        if not os.path.exists(cookies_file):
-            return jsonify({
-                'success': True,
-                'configured': False
-            })
-        
-        cookies = load_cookies_from_file(cookies_file)
-        return jsonify({
-            'success': True,
-            'configured': bool(cookies.get('sessdata'))
         })
     except Exception as e:
         return jsonify({

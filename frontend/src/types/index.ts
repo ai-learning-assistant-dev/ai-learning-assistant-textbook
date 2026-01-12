@@ -153,3 +153,19 @@ export interface CourseData {
   chapters: Chapter[];
 }
 
+export interface CookiesConfigResponse extends ApiResponse {
+  configured: boolean;
+  has_value?: boolean;  // 添加此项以表示是否有已保存的值
+}
+
+export interface UpdateCookiesRequest {
+  sessdata: string;
+}
+
+export interface TestCookiesRequest {
+  sessdata: string;
+}
+
+export interface TestCookiesResponse extends ApiResponse {
+  message?: string;
+}
