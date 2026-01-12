@@ -107,9 +107,20 @@ def import_course_from_json(json_file_path, db_url):
         with open(json_file_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        course_id = uuid.UUID(data['id'])
+        
+        # 先删除数据库中已存在的该课程及其关联数据
+        existing_course = session.query(Course).filter_by(course_id=course_id).first()
+        if existing_course:
+            print(f"检测到已存在的课程: {existing_course.name}，正在删除旧数据...")
+            # 由于设置了级联删除，删除课程会自动删除所有关联的章节、小节、练习题和选项
+            session.delete(existing_course)
+            session.commit()
+            print("旧数据删除完成")
+        
         # 创建课程对象
         course = Course(
-            course_id=uuid.UUID(data['id']),
+            course_id=course_id,
             name=data['title'],
             icon_url=data.get('icon_url', ''),
             description=data.get('description', ''),
@@ -213,7 +224,7 @@ if __name__ == '__main__':
     DB_PASSWORD = 'KLNb923u4_odfh89'  # 数据库密码（请修改）
     
     # JSON文件路径
-    JSON_FILE = 'subtitles/计算机网络/course.json'
+    JSON_FILE = 'subtitles/运动学基础/course.json'
     # ==================================================
     
     # 构建数据库连接URL
