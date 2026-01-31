@@ -78,13 +78,14 @@ try:
 except Exception as e:
     print(f"警告: 添加NVIDIA库路径失败: {e}")
 
-def download_audio(video_url, output_path):
+def download_audio(video_url, output_path, ffmpeg_path=None):
     """
     使用yt-dlp下载视频的音频部分
     
     Args:
         video_url: 视频URL
         output_path: 输出音频文件路径 (例如 audio.mp3)
+        ffmpeg_path: FFmpeg可执行文件路径（可选，为空时使用系统PATH中的ffmpeg）
     
     Returns:
         bool: 是否成功
@@ -117,6 +118,11 @@ def download_audio(video_url, output_path):
             'Referer': 'https://www.bilibili.com',
         }
     }
+    
+    # 如果指定了ffmpeg路径，添加到配置中
+    if ffmpeg_path and os.path.exists(ffmpeg_path):
+        print(f"使用自定义FFmpeg路径: {os.path.abspath(ffmpeg_path)}")
+        ydl_opts['ffmpeg_location'] = os.path.abspath(ffmpeg_path)
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

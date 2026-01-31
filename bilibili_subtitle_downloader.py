@@ -29,7 +29,7 @@ class BilibiliSubtitleDownloader:
     
     def __init__(self, sessdata: Optional[str] = None, bili_jct: Optional[str] = None, 
                  buvid3: Optional[str] = None, debug: bool = False,
-                 request_delay: float = 2.0, max_retries: int = 3):
+                 request_delay: float = 2.0, max_retries: int = 3, ffmpeg_path: Optional[str] = None):
         """
         初始化下载器
         
@@ -40,6 +40,7 @@ class BilibiliSubtitleDownloader:
             debug: 是否开启调试模式
             request_delay: 请求间隔（秒）
             max_retries: 最大重试次数
+            ffmpeg_path: FFmpeg可执行文件路径（可选，为空时使用系统PATH中的ffmpeg）
         """
         self.sessdata = sessdata
         self.bili_jct = bili_jct
@@ -47,6 +48,7 @@ class BilibiliSubtitleDownloader:
         self.debug = debug
         self.request_delay = request_delay
         self.max_retries = max_retries
+        self.ffmpeg_path = ffmpeg_path
         
         # 使用更真实的浏览器User-Agent
         user_agents = [
@@ -387,10 +389,11 @@ class BilibiliSubtitleDownloader:
                 print(f"[DEBUG] Wbi签名生成失败: {e}")
 
         # 3. 尝试旧版 API (作为最后后备)
-        api_attempts.append({
-            'name': 'Legacy API',
-            'url': f'https://api.bilibili.com/x/player/v2?bvid={bvid}&cid={cid}'
-        })
+        # 这个api 会带来不相关视频的字幕
+        # api_attempts.append({
+        #     'name': 'Legacy API',
+        #     'url': f'https://api.bilibili.com/x/player/v2?bvid={bvid}&cid={cid}'
+        # })
         
         for api_info in api_attempts:
             name = api_info['name']
@@ -774,16 +777,29 @@ class BilibiliSubtitleDownloader:
                     # 将每个 episode 转换为与原 pages 结构类似的字典，方便后续逻辑复用
                     for episode in section['episodes']:
                         # 提取关键信息，bvid 是下载字幕时可能需要传递的参数
-                        cid = episode.get('cid')
-                        page_title = episode.get('title') or episode.get('page', {}).get('part', '未知剧集')
-                        bvid_ep = episode.get('bvid')
+                        #bugfix 合集和分p，这个episodes是一个合集视频，下面仍然有可能是一个分p，
+                        if 'pages' in episode:
+                            for page in episode['pages']:
+                                cid = page.get('cid')
+                                page_title = page.get('title') or page.get('part', '未知剧集')
+                                bvid_ep = episode.get('bvid') # 分p视频共用一个bvid
+                                if cid:
+                                    pages.append({
+                                        'cid': cid,
+                                        'part': page_title,
+                                        'bvid': bvid_ep  # 存储bvid，以便在循环中使用
+                                    })
+                        else:
+                            cid = episode.get('cid')
+                            page_title = episode.get('title') or episode.get('page', {}).get('part', '未知剧集')
+                            bvid_ep = episode.get('bvid')
 
-                        if cid:
-                            pages.append({
-                                'cid': cid,
-                                'part': page_title,
-                                'bvid': bvid_ep  # 存储bvid，以便在循环中使用
-                            })
+                            if cid:
+                                pages.append({
+                                    'cid': cid,
+                                    'part': page_title,
+                                    'bvid': bvid_ep  # 存储bvid，以便在循环中使用
+                                })
         else:
             # 否则，使用顶层的 'pages' 字段作为分P列表（如果是普通视频）
             pages = video_info.get('pages', [])
@@ -942,9 +958,8 @@ class BilibiliSubtitleDownloader:
                 print(f"\n处理分P: {page_title} (cid: {cid})")
             
             # 获取字幕信息
-            subtitles = self.get_subtitle_info(main_bvid, cid)
-            
-            if not subtitles:
+
+            if not has_subtitle:
                 print(f"此视频{'分P' if len(pages) > 1 else ''}没有在线字幕")
                 
                 # 检查本地是否存在字幕文件
@@ -995,7 +1010,7 @@ class BilibiliSubtitleDownloader:
                     srt_path = os.path.join(video_dir, srt_filename)
                     
                     # 下载音频
-                    if video_transcriber.download_audio(target_url, audio_path):
+                    if video_transcriber.download_audio(target_url, audio_path, self.ffmpeg_path):
 
                         print("正在生成...")
                         sys.stdout.flush()

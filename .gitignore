@@ -6,6 +6,7 @@ __pycache__/
 .Python
 build/
 models/
+ffmpeg/
 develop-eggs/
 dist/
 downloads/

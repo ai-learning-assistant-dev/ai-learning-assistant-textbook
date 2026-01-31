@@ -409,11 +409,12 @@ def task_queue_worker():
             custom_folder_name = None
             download_all_parts = task_data.get('download_all_parts', False)
             generate_options = task_data.get('generate_options')
+            ffmpeg_path = task_data.get('ffmpeg_path')
             
             print(f"[{thread_name}] 开始处理任务 {task_id}: {url}")
             
             # 执行任务
-            process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts, generate_options)
+            process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name, download_all_parts, generate_options, ffmpeg_path)
             
             print(f"[{thread_name}] 任务 {task_id} 处理完成")
             
@@ -429,7 +430,7 @@ def task_queue_worker():
             task_queue.task_done()
 
 
-def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False, generate_options=None):
+def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False, generate_options=None, ffmpeg_path=None):
     """处理单个视频的下载和总结任务"""
     if generate_options is None:
         generate_options = {
@@ -460,7 +461,8 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             sessdata=sessdata,
             bili_jct=config_cookies.get('bili_jct'),
             buvid3=config_cookies.get('buvid3'),
-            debug=False
+            debug=False,
+            ffmpeg_path=ffmpeg_path
         )
         
         # 下载字幕和封面
@@ -1130,6 +1132,9 @@ def create_tasks():
         config['last_selected_model'] = model_name
         save_app_config(config)
         
+        # 获取ffmpeg路径配置
+        ffmpeg_path = config.get('ffmpeg_path', '')
+        
         # 创建输出目录
         os.makedirs(output_dir, exist_ok=True)
         
@@ -1148,7 +1153,8 @@ def create_tasks():
                 sessdata=config_cookies.get('sessdata'),
                 bili_jct=config_cookies.get('bili_jct'),
                 buvid3=config_cookies.get('buvid3'),
-                debug=False
+                debug=False,
+                ffmpeg_path=ffmpeg_path
             )
             
             if downloader.is_favorite_url(url):
@@ -1198,7 +1204,8 @@ def create_tasks():
                 'model_name': model_name,
                 'cookies_file': cookies_file,
                 'download_all_parts': download_all_parts,
-                'generate_options': generate_options
+                'generate_options': generate_options,
+                'ffmpeg_path': ffmpeg_path
             }
             task_queue.put(task_data)
             
