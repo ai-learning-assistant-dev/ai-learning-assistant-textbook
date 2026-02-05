@@ -6,6 +6,7 @@ __pycache__/
 .Python
 build/
 models/
+ffmpeg/
 develop-eggs/
 dist/
 downloads/
@@ -32,6 +33,8 @@ venv_build/
 ENV/
 env/
 .venv
+runtime/
+site-packages/
 
 # IDE
 .vscode/
