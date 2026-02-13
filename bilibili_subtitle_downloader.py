@@ -803,6 +803,7 @@ class BilibiliSubtitleDownloader:
         else:
             # 否则，使用顶层的 'pages' 字段作为分P列表（如果是普通视频）
             pages = video_info.get('pages', [])
+            pages['page'] = video_info.get('title') or pages.get('page')
             if not pages:
                 print("错误: 未找到视频分P信息")
                 return result
@@ -878,48 +879,6 @@ class BilibiliSubtitleDownloader:
                 print("提示: 此视频没有官方/AI字幕，将尝试使用本地ASR模型转录...")
             else:
                 print("提示: 此视频没有官方/AI字幕，且未检测到 video_transcriber 模块，无法进行本地转录")
-        
-        # 确认有字幕后，才创建输出目录和下载封面
-        # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
-        folder_name = custom_folder_name if custom_folder_name else title
-        root_dir = os.path.join(output_dir, folder_name)
-        # 将所有视频数据文件放在 data 子目录下
-        video_dir = os.path.join(root_dir, 'data')
-        
-        os.makedirs(root_dir, exist_ok=True)
-        os.makedirs(video_dir, exist_ok=True)
-        
-        result['video_dir'] = video_dir
-        print(f"输出目录: {video_dir}")
-        
-        # Determine the part title and page number to use for Excel
-        excel_part_title = None
-        excel_page_num = None
-        if not download_all_parts and pages:
-             # Since pages is filtered to contain only the target page (if found)
-             # We can use the first page's part title and page number
-             excel_part_title = pages[0].get('part')
-             excel_page_num = pages[0].get('page')
-
-        # 保存视频信息到JSON文件（带视频标题前缀）
-        video_info_filename = f"{title}_video_info.json"
-        video_info_path = os.path.join(video_dir, video_info_filename)
-        self.save_video_info(video_info, video_index, video_info_path, download_all_parts, part_title=excel_part_title, page_num=excel_page_num)
-        
-        # 下载封面图片（带视频标题前缀）
-        if download_cover and cover_url:
-            print(f"\n下载视频封面...")
-            # 从URL中提取文件扩展名，如果没有则使用.jpg
-            import urllib.parse
-            parsed_url = urllib.parse.urlparse(cover_url)
-            cover_ext = os.path.splitext(parsed_url.path)[1] or '.jpg'
-            
-            cover_filename = f"{title}_cover{cover_ext}"
-            cover_path = os.path.join(video_dir, cover_filename)
-            
-            if self.download_cover(cover_url, cover_path):
-                result['cover'] = cover_path
-            print()
         
         # 遍历每个分P下载字幕
         for page in pages:

@@ -258,11 +258,9 @@ def main():
             print("-" * 80)
             
             try:
-                # 从字幕文件名中提取标题（去除扩展名和语言后缀）
-                subtitle_filename = os.path.basename(subtitle_file)
-                # 去除扩展名
-                subtitle_name = os.path.splitext(subtitle_filename)[0]                    # 去除语言后缀（如 _ai-zh, _zh-CN 等）
-                subtitle_title = subtitle_name.rsplit('_', 1)[0] if '_' in subtitle_name else subtitle_name
+                # 使用视频标题作为 subtitle_title，而不是从文件名推断
+                # 这样可以确保所有分P都使用统一的视频主标题
+                subtitle_title = video_title
                     
                 if args.debug:
                     print(f"[DEBUG] 字幕标题: {subtitle_title}")
