@@ -92,7 +92,8 @@ def load_app_config():
         'auto_refresh_interval': 2000,
         'web_port': 5000,
         'download_all_parts': False,  # 默认关闭：只下载URL指定的视频，不下载所有分P
-        'max_concurrent_tasks': 2  # 最大并发任务数：默认同时处理2个视频（避免API并发过高）
+        'max_concurrent_tasks': 2,  # 最大并发任务数：默认同时处理2个视频（避免API并发过高）
+        'ffmpeg_path': 'ffmpeg'
     }
     
     if not os.path.exists(config_file):
@@ -179,8 +180,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
     import math
     
     # video_dir 指向 .../data 目录，section.json 文件在上一级目录
-    parent_dir = os.path.dirname(video_dir)
-    section_file_name = os.path.join(parent_dir, 'section.json')
+    section_file_name = os.path.join(video_dir, 'section.json')
     
     # 读取或初始化 sections 列表
     if os.path.exists(section_file_name):
