@@ -345,12 +345,13 @@ class BilibiliSubtitleDownloader:
         """
         with open(output_path, 'w', encoding='utf-8') as f:
             json.dump(video_info, f, ensure_ascii=False, indent=2)
-        tittle = video_info['title']
-        # 处理视频信息并生成Excel文件,并命名为video_info中的tittle字段.xlsx
-        if download_all_parts:
-            process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
-        else:
-            process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index, part_title=part_title, page_num=page_num)
+        
+        # 不再生成Excel文件
+        # tittle = video_info['title']
+        # if download_all_parts:
+        #     process_video_info.process_video_to_excel_final(output_path, '模板.xlsx')
+        # else:
+        #     process_video_info.process_video_to_excel_flash(output_path, '模板.xlsx' , video_index, part_title=part_title, page_num=page_num)
 
         if self.debug:
             print(f"[DEBUG] 视频信息已保存到: {output_path}")
@@ -778,7 +779,7 @@ class BilibiliSubtitleDownloader:
                     for episode in section['episodes']:
                         # 提取关键信息，bvid 是下载字幕时可能需要传递的参数
                         #bugfix 合集和分p，这个episodes是一个合集视频，下面仍然有可能是一个分p，
-                        if 'pages' in episode:
+                        if 'pages' in episode and len(episode['pages']) > 1 :
                             for page in episode['pages']:
                                 cid = page.get('cid')
                                 page_title = page.get('title') or page.get('part', '未知剧集')
@@ -803,6 +804,8 @@ class BilibiliSubtitleDownloader:
         else:
             # 否则，使用顶层的 'pages' 字段作为分P列表（如果是普通视频）
             pages = video_info.get('pages', [])
+            origin = pages[0].get('part')
+            pages[0]['part'] = video_info.get('title') if video_info.get('title') else origin
             if not pages:
                 print("错误: 未找到视频分P信息")
                 return result
@@ -879,48 +882,6 @@ class BilibiliSubtitleDownloader:
             else:
                 print("提示: 此视频没有官方/AI字幕，且未检测到 video_transcriber 模块，无法进行本地转录")
         
-        # 确认有字幕后，才创建输出目录和下载封面
-        # 如果指定了自定义文件夹名称，则使用它；否则使用视频标题
-        folder_name = custom_folder_name if custom_folder_name else title
-        root_dir = os.path.join(output_dir, folder_name)
-        # 将所有视频数据文件放在 data 子目录下
-        video_dir = os.path.join(root_dir, 'data')
-        
-        os.makedirs(root_dir, exist_ok=True)
-        os.makedirs(video_dir, exist_ok=True)
-        
-        result['video_dir'] = video_dir
-        print(f"输出目录: {video_dir}")
-        
-        # Determine the part title and page number to use for Excel
-        excel_part_title = None
-        excel_page_num = None
-        if not download_all_parts and pages:
-             # Since pages is filtered to contain only the target page (if found)
-             # We can use the first page's part title and page number
-             excel_part_title = pages[0].get('part')
-             excel_page_num = pages[0].get('page')
-
-        # 保存视频信息到JSON文件（带视频标题前缀）
-        video_info_filename = f"{title}_video_info.json"
-        video_info_path = os.path.join(video_dir, video_info_filename)
-        self.save_video_info(video_info, video_index, video_info_path, download_all_parts, part_title=excel_part_title, page_num=excel_page_num)
-        
-        # 下载封面图片（带视频标题前缀）
-        if download_cover and cover_url:
-            print(f"\n下载视频封面...")
-            # 从URL中提取文件扩展名，如果没有则使用.jpg
-            import urllib.parse
-            parsed_url = urllib.parse.urlparse(cover_url)
-            cover_ext = os.path.splitext(parsed_url.path)[1] or '.jpg'
-            
-            cover_filename = f"{title}_cover{cover_ext}"
-            cover_path = os.path.join(video_dir, cover_filename)
-            
-            if self.download_cover(cover_url, cover_path):
-                result['cover'] = cover_path
-            print()
-        
         # 遍历每个分P下载字幕
         for page in pages:
             # 优先使用剧集自己的 bvid，如果没有，则使用原始视频的 bvid
@@ -953,13 +914,55 @@ class BilibiliSubtitleDownloader:
             
             # 再次清理文件名，确保安全
             page_title = process_video_info.sanitize_filename(page_title)
+            
+            # 为每个分P创建独立的文件夹
+            # 使用custom_folder_name作为基础名称（如果指定），否则使用page_title
+            if custom_folder_name:
+                # 如果有自定义文件夹名称，格式为：自定义名称_P序号（多P时）或 自定义名称（单P时）
+                if len(pages) > 1 or page_num > 1:
+                    folder_name = f"{custom_folder_name}_P{page_num}"
+                else:
+                    folder_name = custom_folder_name
+            else:
+                # 否则直接使用page_title作为文件夹名称
+                folder_name = page_title
+            
+            # 直接在output_dir下创建文件夹，不使用data子目录
+            video_dir = os.path.join(output_dir, folder_name)
+            os.makedirs(video_dir, exist_ok=True)
+            
+            # 更新result['video_dir']为当前分P的目录（如果是单P，或最后一个P）
+            result['video_dir'] = video_dir
+            print(f"\n输出目录: {video_dir}")
+            
+            # 保存当前分P的视频信息到JSON文件
+            video_info_filename = f"{page_title}_video_info.json"
+            video_info_path = os.path.join(video_dir, video_info_filename)
+            excel_part_title = part_title if part_title else None
+            excel_page_num = page_num
+            self.save_video_info(video_info, video_index, video_info_path, download_all_parts, part_title=excel_part_title, page_num=excel_page_num)
+            
+            # 下载封面图片到当前分P的文件夹
+            if download_cover and cover_url:
+                print(f"\n下载视频封面...")
+                # 从URL中提取文件扩展名，如果没有则使用.jpg
+                import urllib.parse
+                parsed_url = urllib.parse.urlparse(cover_url)
+                cover_ext = os.path.splitext(parsed_url.path)[1] or '.jpg'
+                
+                cover_filename = f"{page_title}_cover{cover_ext}"
+                cover_path = os.path.join(video_dir, cover_filename)
+                
+                if self.download_cover(cover_url, cover_path):
+                    result['cover'] = cover_path
 
             if len(pages) > 1:
                 print(f"\n处理分P: {page_title} (cid: {cid})")
             
             # 获取字幕信息
-
-            if not has_subtitle:
+            subtitles = self.get_subtitle_info(main_bvid, cid)
+            
+            if not subtitles:
                 print(f"此视频{'分P' if len(pages) > 1 else ''}没有在线字幕")
                 
                 # 检查本地是否存在字幕文件

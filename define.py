@@ -58,6 +58,7 @@ class Course:
     id: str
     title: str
     description: str
+    icon_url: Optional[str] = ""
     chapters: List[Chapter] = field(default_factory=list)
 
 
@@ -78,6 +79,7 @@ def create_empty_course(title: str, description: str = "") -> dict:
         "id": str(uuid.uuid4().hex),
         "title": title,
         "description": description,
+        "icon_url": "",
         "chapters": []
     }
     
@@ -89,6 +91,7 @@ EXAMPLE_COURSE = {
     "id": "uuidv4",
     "title": "计算机原理通识",
     "description": "计算机原理通识课程，适合初学者学习",
+    "icon_url": "",
     "chapters": [
         {
             "id": "uuidv4",

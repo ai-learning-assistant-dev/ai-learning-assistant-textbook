@@ -150,6 +150,7 @@ export interface CourseData {
   id: string;
   title: string;
   description: string;
+  icon_url?: string;  // 课程图标，支持base64或URL
   chapters: Chapter[];
 }
 

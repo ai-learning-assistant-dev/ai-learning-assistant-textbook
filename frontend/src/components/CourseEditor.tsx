@@ -489,6 +489,9 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          
+          {/* 课程图标上传 */}
+          <CourseIconUploader activePath="root" />
         </div>
       )}
 
@@ -583,6 +586,126 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
           <ExercisesManager key={`exercises-${activePath}`} activePath={activePath} />
         </div>
       )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------
+// 子组件：课程图标上传器
+// ---------------------------------------------------------
+interface CourseIconUploaderProps {
+  activePath: string;
+}
+
+const CourseIconUploader: React.FC<CourseIconUploaderProps> = ({ activePath }) => {
+  const { register, control, setValue } = useFormContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 监听icon_url的变化以实时预览
+  const iconUrl = useWatch({
+    control,
+    name: 'icon_url',
+    defaultValue: ''
+  });
+
+  // 处理文件选择
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 验证文件类型
+    if (!file.type.startsWith('image/')) {
+      alert('请选择图片文件！');
+      return;
+    }
+
+    // 验证文件大小（限制为2MB）
+    const maxSize = 2 * 1024 * 1024; // 2MB
+    if (file.size > maxSize) {
+      alert('图片大小不能超过2MB！');
+      return;
+    }
+
+    // 读取文件并转换为base64
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64String = event.target?.result as string;
+      setValue('icon_url', base64String, { shouldDirty: true });
+    };
+    reader.onerror = () => {
+      alert('读取图片失败，请重试！');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 触发文件选择
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  // 清除图标
+  const handleClearIcon = () => {
+    setValue('icon_url', '', { shouldDirty: true });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  return (
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">课程图标</label>
+      <div className="flex items-start gap-4">
+        {/* 预览区域 */}
+        <div className="flex-shrink-0">
+          {iconUrl ? (
+            <div className="relative w-32 h-32 border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50">
+              <img
+                src={iconUrl}
+                alt="课程图标预览"
+                className="w-full h-full object-cover"
+              />
+              <button
+                type="button"
+                onClick={handleClearIcon}
+                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center hover:bg-red-600 transition-colors"
+                title="清除图标"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <div className="w-32 h-32 border-2 border-dashed border-gray-300 rounded-lg flex items-center justify-center bg-gray-50">
+              <span className="text-gray-400 text-sm text-center px-2">暂无图标</span>
+            </div>
+          )}
+        </div>
+
+        {/* 操作按钮和说明 */}
+        <div className="flex-1">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleFileChange}
+            accept="image/*"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={handleUploadClick}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors mb-2"
+          >
+            {iconUrl ? '更换图标' : '上传图标'}
+          </button>
+          <div className="text-xs text-gray-500 space-y-1">
+            <p>• 支持 JPG、PNG、GIF 等图片格式</p>
+            <p>• 图片大小不超过 2MB</p>
+            <p>• 推荐尺寸：正方形，至少 256x256 像素</p>
+            <p>• 图片将以 Base64 格式保存在课程数据中</p>
+          </div>
+        </div>
+      </div>
+      {/* 隐藏字段保存base64值 */}
+      <input type="hidden" {...register('icon_url')} />
     </div>
   );
 };
@@ -842,6 +965,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     id: generateUUID(),
     title: "",
     description: "",
+    icon_url: "",
     chapters: []
   };
 
