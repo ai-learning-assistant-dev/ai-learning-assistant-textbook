@@ -399,7 +399,7 @@ function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `course-${data.id || Date.now()}.json`;
+    a.download = `course-${data.course_id || Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

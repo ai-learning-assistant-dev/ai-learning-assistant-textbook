@@ -9,7 +9,7 @@ from typing import List, Optional
 @dataclass
 class Option:
     """选择题选项"""
-    id: str
+    option_id: str
     text: str
     is_correct: bool
 
@@ -17,24 +17,25 @@ class Option:
 @dataclass
 class Exercise:
     """练习题"""
-    id: str
+    exercise_id: str
     question: str
     score: int
     type: str  # 单选、多选、判断、填空等
+    answer: Optional[str] = None  # 简答题：参考答案
     options: List[Option] = field(default_factory=list)
 
 
 @dataclass
 class LeadingQuestion:
     """引导性问题"""
-    id: str
+    question_id: str
     question: str
 
 
 @dataclass
 class Section:
-    """章节"""
-    id: str
+    """小节"""
+    section_id: str
     title: str
     order: int
     estimated_time: int  # 预计学习时间（分钟）
@@ -46,7 +47,7 @@ class Section:
 @dataclass
 class Chapter:
     """章"""
-    id: str
+    chapter_id: str
     title: str
     order: int
     sections: List[Section] = field(default_factory=list)
@@ -55,7 +56,7 @@ class Chapter:
 @dataclass
 class Course:
     """课程"""
-    id: str
+    course_id: str
     title: str
     description: str
     icon_url: Optional[str] = ""
@@ -76,7 +77,8 @@ def create_empty_course(title: str, description: str = "") -> dict:
     import uuid
     
     course = {
-        "id": str(uuid.uuid4().hex),
+        # 与课程库/导入约定一致：标准 UUID 字符串（含连字符），不用 .hex
+        "course_id": str(uuid.uuid4()),
         "title": title,
         "description": description,
         "icon_url": "",
@@ -88,47 +90,47 @@ def create_empty_course(title: str, description: str = "") -> dict:
 
 # 示例课程结构（完整示例）
 EXAMPLE_COURSE = {
-    "id": "uuidv4",
+    "course_id": "uuidv4",
     "title": "计算机原理通识",
     "description": "计算机原理通识课程，适合初学者学习",
     "icon_url": "",
     "chapters": [
         {
-            "id": "uuidv4",
+            "chapter_id": "uuidv4",
             "title": "计算机组成硬件",
             "order": 0,
             "sections": [
                 {
-                    "id": "uuidv4",
+                    "section_id": "uuidv4",
                     "title": "家用计算机硬件组成",
                     "order": 0,
                     "estimated_time": 0,
                     "video_url": "",
                     "leading_questions": [
                         {
-                            "id": "uuidv4",
+                            "question_id": "uuidv4",
                             "question": "家用计算机硬件组成有哪些？"
                         }
                     ],
                     "exercises": [
                         {
-                            "id": "uuidv4",
+                            "exercise_id": "uuidv4",
                             "question": "以下哪个硬件是专门负责图形显示的？",
                             "score": 5,
                             "type": "单选",
                             "options": [
                                 {
-                                    "id": "uuidv4",
+                                    "option_id": "uuidv4",
                                     "text": "显卡",
                                     "is_correct": True
                                 },
                                 {
-                                    "id": "uuidv4",
+                                    "option_id": "uuidv4",
                                     "text": "主板",
                                     "is_correct": False
                                 },
                                 {
-                                    "id": "uuidv4",
+                                    "option_id": "uuidv4",
                                     "text": "内存",
                                     "is_correct": False
                                 }
@@ -140,5 +142,4 @@ EXAMPLE_COURSE = {
         }
     ]
 }
-
 

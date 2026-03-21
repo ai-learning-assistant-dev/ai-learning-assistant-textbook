@@ -11,10 +11,12 @@ import uuid
 import time
 import threading
 import shutil
+import urllib.error
+import urllib.request
 from pathlib import Path
 from datetime import datetime
 from queue import Queue
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, Response
 from werkzeug.utils import secure_filename
 
 from process_generated_content import save_data_to_excel
@@ -93,7 +95,9 @@ def load_app_config():
         'web_port': 5000,
         'download_all_parts': False,  # 默认关闭：只下载URL指定的视频，不下载所有分P
         'max_concurrent_tasks': 2,  # 最大并发任务数：默认同时处理2个视频（避免API并发过高）
-        'ffmpeg_path': 'ffmpeg'
+        'ffmpeg_path': 'ffmpeg',
+        # 课程库 HTTP 服务（提交课程、删除课程）；前端 POST /api/courses/* 由本服务转发至此
+        'courses_api_base': 'http://127.0.0.1:3000',
     }
     
     if not os.path.exists(config_file):
@@ -226,7 +230,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                 options_list = []
                 for key in sorted(options_dict.keys()):
                     options_list.append({
-                        "id": uuid.uuid4().hex,
+                        "option_id": str(uuid.uuid4()),
                         "text": options_dict[key],
                         "is_correct": key in correct_answer
                     })
@@ -235,7 +239,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                 question_type = "单选" if len(correct_answer) == 1 else "多选"
                 
                 exercises_list.append({
-                    "id": uuid.uuid4().hex,
+                    "exercise_id": str(uuid.uuid4()),
                     "question": mc.get("question", ""),
                     "score": 5,
                     "type": question_type,
@@ -250,7 +254,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                     reference = "\n".join(answer_points)
                 
                 exercises_list.append({
-                    "id": uuid.uuid4().hex,
+                    "exercise_id": str(uuid.uuid4()),
                     "question": sa.get("question", ""),
                     "score": 15,
                     "type": "简答",
@@ -264,7 +268,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                 questions_json = json.load(f)
                 for q in questions_json.get("questions", []):
                     leading_questions_list.append({
-                        "id": uuid.uuid4().hex,
+                        "question_id": str(uuid.uuid4()),
                         "question": q.get("question", "")
                     })
         
@@ -357,7 +361,6 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
                 break
         
         if existing_section:
-            # 更新现有 section
             existing_section['exercises'] = exercises_list
             existing_section['leading_questions'] = leading_questions_list
             existing_section['video_url'] = video_url
@@ -368,7 +371,7 @@ def save_sections_to_json(video_dir, video_url, all_generated_files):
         else:
             # 创建新的 section
             section_obj = {
-                "id": uuid.uuid4().hex,
+                "section_id": str(uuid.uuid4()),
                 "title": subtitle_title,
                 "order": 0,  # 固定为0
                 "estimated_time": estimated_time,  # 使用视频时长（分钟）
@@ -1464,6 +1467,53 @@ def save_course(workspace_name):
             'success': False,
             'error': str(e)
         }), 500
+
+
+def _courses_api_base_url():
+    base = (load_app_config().get('courses_api_base') or 'http://127.0.0.1:3000').strip().rstrip('/')
+    return base or 'http://127.0.0.1:3000'
+
+
+def _proxy_post_to_courses_api(upstream_path: str):
+    """
+    将 POST 转发到独立课程库服务。
+    upstream_path 须为 '/api/courses/delete' 或 '/api/courses/import'（与 curl 示例一致）。
+    说明：static_url_path='' 时，未注册的路径会落到静态文件规则上，仅允许 GET，POST 会得到 405。
+    """
+    url = _courses_api_base_url() + upstream_path
+    payload = request.get_data()
+    req = urllib.request.Request(url, data=payload, method='POST')
+    ct = request.headers.get('Content-Type')
+    req.add_header('Content-Type', ct or 'application/json')
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            body = resp.read()
+            out_ct = resp.headers.get('Content-Type') or 'application/json; charset=utf-8'
+            return Response(body, status=resp.status, content_type=out_ct)
+    except urllib.error.HTTPError as e:
+        err_body = e.read()
+        out_ct = (e.headers.get('Content-Type') if e.headers else None) or 'application/json; charset=utf-8'
+        return Response(err_body, status=e.code, content_type=out_ct)
+    except urllib.error.URLError as e:
+        return jsonify({
+            'success': False,
+            'error': f'无法连接课程库服务 ({url}): {e.reason}',
+        }), 502
+
+
+@app.route('/api/courses/delete', methods=['POST'])
+def courses_delete_proxy():
+    return _proxy_post_to_courses_api('/api/courses/delete')
+
+
+@app.route('/api/courses/import', methods=['POST'])
+def courses_import_proxy():
+    return _proxy_post_to_courses_api('/api/courses/import')
+
+
+@app.route('/api/courses/getById', methods=['POST'])
+def courses_get_by_id_proxy():
+    return _proxy_post_to_courses_api('/api/courses/getById')
 
 
 if __name__ == '__main__':

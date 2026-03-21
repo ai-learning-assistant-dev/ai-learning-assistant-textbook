@@ -1,14 +1,89 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm, useFieldArray, useWatch, FormProvider, useFormContext } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
-import { CourseData, Chapter, Section } from '../types';
+import {
+  CourseData,
+  Chapter,
+  Section,
+  Exercise,
+  ExerciseOption,
+  LeadingQuestion,
+} from '../types';
 
-// 生成32位UUID hex字符串（类似Python的uuid.uuid4().hex）
-const generateUUID = (): string => {
-  // uuidv4() 返回格式: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  // 移除连字符得到32位hex: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-  return uuidv4().replace(/-/g, '');
-};
+/** 标准 UUID 字符串（含连字符），与 Python str(uuid.uuid4()) 一致 */
+const newStandardUuid = (): string => uuidv4();
+
+/** 不兼容旧版 JSON（含通用 id 字段）；仅整理缺省的非主键字段，主键须已为 course_id / chapter_id 等 */
+function sanitizeLeadingQuestion(r: LeadingQuestion): LeadingQuestion {
+  return {
+    question_id: r.question_id,
+    question: r.question ?? '',
+  };
+}
+
+function sanitizeExerciseOption(r: ExerciseOption): ExerciseOption {
+  return {
+    option_id: r.option_id,
+    text: r.text ?? '',
+    is_correct: !!r.is_correct,
+  };
+}
+
+function sanitizeExercise(r: Exercise): Exercise {
+  return {
+    exercise_id: r.exercise_id,
+    question: r.question ?? '',
+    score: typeof r.score === 'number' ? r.score : 0,
+    type: r.type ?? '单选',
+    answer: r.answer ?? '',
+    options: (r.options ?? []).map(sanitizeExerciseOption),
+  };
+}
+
+function sanitizeSection(raw: Section): Section {
+  return {
+    section_id: raw.section_id,
+    title: raw.title ?? '',
+    order: typeof raw.order === 'number' ? raw.order : 0,
+    estimated_time: typeof raw.estimated_time === 'number' ? raw.estimated_time : 0,
+    video_url: raw.video_url ?? '',
+    leading_questions: (raw.leading_questions ?? []).map(sanitizeLeadingQuestion),
+    exercises: (raw.exercises ?? []).map(sanitizeExercise),
+  };
+}
+
+function sanitizeChapter(raw: Chapter): Chapter {
+  return {
+    chapter_id: raw.chapter_id,
+    title: raw.title ?? '',
+    order: typeof raw.order === 'number' ? raw.order : 0,
+    sections: (raw.sections ?? []).map(sanitizeSection),
+  };
+}
+
+function sanitizeCourseData(data: CourseData): CourseData {
+  return {
+    course_id: data.course_id,
+    title: data.title ?? '',
+    description: data.description ?? '',
+    icon_url: data.icon_url ?? '',
+    chapters: (data.chapters ?? []).map(sanitizeChapter),
+  };
+}
+
+/**
+ * 学习助手 delete/import 使用带连字符的标准 UUID。
+ * 若 course_id 为 32 位 hex（无连字符），格式化为 8-4-4-4-12；已为 UUID 则规范化小写后原样使用。
+ */
+function courseIdForApi(raw: string): string {
+  const s = raw.trim().toLowerCase();
+  if (!s) return s;
+  const hexOnly = s.replace(/-/g, '');
+  if (hexOnly.length === 32 && /^[0-9a-f]+$/.test(hexOnly)) {
+    return `${hexOnly.slice(0, 8)}-${hexOnly.slice(8, 12)}-${hexOnly.slice(12, 16)}-${hexOnly.slice(16, 20)}-${hexOnly.slice(20, 32)}`;
+  }
+  return s;
+}
 
 // ---------------------------------------------------------
 // 通用确认/提示对话框组件
@@ -173,7 +248,7 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ control, onSelect, activePath
 
       {/* 章节点 */}
       {chapters?.map((chapter: Chapter, cIdx: number) => (
-        <div key={chapter.id || cIdx} className="mb-3">
+        <div key={chapter.chapter_id || cIdx} className="mb-3">
           <div className="flex items-center gap-2">
             <div
               onClick={() => onSelect(`chapters.${cIdx}`, 'chapter')}
@@ -256,7 +331,7 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ control, onSelect, activePath
               const isDragging = draggedSection?.chapterIndex === cIdx && draggedSection?.sectionIndex === sIdx;
 
               return (
-                <React.Fragment key={section.id || sIdx}>
+                <React.Fragment key={section.section_id || sIdx}>
                   {/* 拖拽放置指示器 - 在节之前 */}
                   {dragOverTarget?.chapterIndex === cIdx &&
                     dragOverTarget.sectionIndex === sIdx &&
@@ -471,7 +546,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
       {activeType === 'course' && (
         <div className="space-y-4">
           {/* ID字段隐藏，但保留在表单中 */}
-          <input type="hidden" {...register('id')} />
+          <input type="hidden" {...register('course_id')} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">课程标题</label>
             <input
@@ -499,7 +574,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
       {activeType === 'chapter' && (
         <div className="space-y-4">
           {/* ID字段隐藏，但保留在表单中 */}
-          <input type="hidden" {...register(`${activePath}.id`)} />
+          <input type="hidden" {...register(`${activePath}.chapter_id`)} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               章标题 {!currentTitle && <span className="text-gray-400 text-xs">(默认: {getDefaultTitle()})</span>}
@@ -532,7 +607,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
       {activeType === 'section' && (
         <div className="space-y-4">
           {/* ID字段隐藏，但保留在表单中 */}
-          <input type="hidden" {...register(`${activePath}.id`)} />
+          <input type="hidden" {...register(`${activePath}.section_id`)} />
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               节标题 {!currentTitle && <span className="text-gray-400 text-xs">(默认: {getDefaultTitle()})</span>}
@@ -730,7 +805,7 @@ const LeadingQuestionsManager: React.FC<LeadingQuestionsManagerProps> = ({ activ
         <h3 className="text-lg font-semibold">引导问题</h3>
         <button
           type="button"
-          onClick={() => append({ id: generateUUID(), question: "" })}
+          onClick={() => append({ question_id: newStandardUuid(), question: "" })}
           className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
         >
           + 添加问题
@@ -741,7 +816,7 @@ const LeadingQuestionsManager: React.FC<LeadingQuestionsManagerProps> = ({ activ
           <span className="font-semibold mt-2">Q{index + 1}:</span>
           <div className="flex-1">
             {/* ID字段隐藏，但保留在表单中 */}
-            <input type="hidden" {...register(`${activePath}.leading_questions.${index}.id`)} />
+            <input type="hidden" {...register(`${activePath}.leading_questions.${index}.question_id`)} />
             <input
               {...register(`${activePath}.leading_questions.${index}.question`)}
               placeholder="问题描述"
@@ -785,10 +860,11 @@ const ExercisesManager: React.FC<ExercisesManagerProps> = ({ activePath }) => {
         <button
           type="button"
           onClick={() => append({
-            id: generateUUID(),
+            exercise_id: newStandardUuid(),
             question: "",
             score: 0,
             type: "单选",
+            answer: "",
             options: []
           })}
           className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm"
@@ -819,6 +895,10 @@ interface ExerciseItemProps {
 
 const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove }) => {
   const { register, control } = useFormContext();
+  const exerciseType = useWatch({
+    control,
+    name: `${activePath}.exercises.${index}.type` as const,
+  });
   const { fields, append, remove } = useFieldArray({
     control,
     name: `${activePath}.exercises.${index}.options`
@@ -838,7 +918,7 @@ const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove
       </div>
       <div className="space-y-2">
         {/* ID字段隐藏，但保留在表单中 */}
-        <input type="hidden" {...register(`${activePath}.exercises.${index}.id`)} />
+        <input type="hidden" {...register(`${activePath}.exercises.${index}.exercise_id`)} />
         <input
           {...register(`${activePath}.exercises.${index}.question`)}
           placeholder="问题描述"
@@ -863,13 +943,26 @@ const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove
           </select>
         </div>
 
+        {exerciseType === '简答' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">参考答案</label>
+            <textarea
+              {...register(`${activePath}.exercises.${index}.answer`)}
+              rows={2}
+              placeholder="简答题的参考答案描述"
+              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-green-500/30"
+            />
+            <p className="text-xs text-gray-500 mt-1">保存在题目的 answer 字段，供学习助手判分使用</p>
+          </div>
+        )}
+
         {/* 选项列表 */}
         <div className="mt-3 pl-4 border-l-2 border-gray-300">
           <div className="flex justify-between items-center mb-2">
             <span className="text-sm font-medium">选项</span>
             <button
               type="button"
-              onClick={() => append({ id: generateUUID(), text: "", is_correct: false })}
+              onClick={() => append({ option_id: newStandardUuid(), text: "", is_correct: false })}
               className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs"
             >
               + 添加选项
@@ -883,7 +976,7 @@ const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove
                 className="w-4 h-4"
               />
               {/* ID字段隐藏，但保留在表单中 */}
-              <input type="hidden" {...register(`${activePath}.exercises.${index}.options.${optIdx}.id`)} />
+              <input type="hidden" {...register(`${activePath}.exercises.${index}.options.${optIdx}.option_id`)} />
               <input
                 {...register(`${activePath}.exercises.${index}.options.${optIdx}.text`)}
                 placeholder="选项文本"
@@ -921,14 +1014,14 @@ const SectionPanel: React.FC<SectionPanelProps> = ({ sections, onInsertSection }
           <p className="text-gray-400 text-sm">暂无可用的节</p>
         ) : (
           sections.map((section, idx) => (
-            <div key={section.id || idx} className="bg-white p-3 rounded border border-gray-200">
+            <div key={section.section_id || idx} className="bg-white p-3 rounded border border-gray-200">
               <div className="flex justify-between items-start gap-2">
                 <div className="flex-1">
                   <div className="font-medium text-sm mb-1">
                     {section.title || `节 ${idx + 1}`}
                   </div>
                   <div className="text-xs text-gray-500">
-                    ID: {section.id}
+                    section_id: {section.section_id}
                   </div>
                   {section.estimated_time && (
                     <div className="text-xs text-gray-500">
@@ -961,13 +1054,15 @@ interface CourseEditorProps {
 }
 
 const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, workspaces = [] }) => {
-  const defaultValues: CourseData = initialData || {
-    id: generateUUID(),
-    title: "",
-    description: "",
-    icon_url: "",
-    chapters: []
-  };
+    const defaultValues: CourseData = initialData
+    ? sanitizeCourseData(initialData)
+    : {
+        course_id: newStandardUuid(),
+        title: "",
+        description: "",
+        icon_url: "",
+        chapters: []
+      };
 
   const methods = useForm<CourseData>({
     defaultValues
@@ -976,7 +1071,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
   // 当initialData变化时，更新表单数据
   useEffect(() => {
     if (initialData) {
-      methods.reset(initialData);
+      methods.reset(sanitizeCourseData(initialData));
     }
   }, [initialData, methods]);
 
@@ -991,6 +1086,8 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
   const [openMode, setOpenMode] = useState<'workspace' | 'file' | null>(null); // 打开模式
 
   // 统一对话框状态
+  const [isSubmittingCourse, setIsSubmittingCourse] = useState(false);
+
   const [dialog, setDialog] = useState<{
     isOpen: boolean;
     title: string;
@@ -1039,7 +1136,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
       const data = await response.json();
 
       if (data.success) {
-        methods.reset(data.course);
+        methods.reset(sanitizeCourseData(data.course));
         setAvailableSections(data.sections);
         setOpenMode('workspace');
       } else {
@@ -1076,6 +1173,156 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     }
   };
 
+  /** 导入到学习助手；覆盖场景下可先 delete 再 import，新课程可跳过 delete */
+  const performSubmitCourseToLibrary = async (options?: { skipDelete?: boolean }) => {
+    const courseData = methods.getValues();
+    const courseId = (courseData.course_id || '').trim();
+    if (!courseId) {
+      showDialog('提示', '请先填写课程 ID', 'warning');
+      return;
+    }
+
+    const courseIdNormalized = courseIdForApi(courseId);
+
+    setIsSubmittingCourse(true);
+    try {
+      if (!options?.skipDelete) {
+        const delRes = await fetch('/api/courses/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course_id: courseIdNormalized }),
+        });
+
+        const delRaw = await delRes.text();
+        let delJson: Record<string, unknown> = {};
+        try {
+          delJson = delRaw ? (JSON.parse(delRaw) as Record<string, unknown>) : {};
+        } catch {
+          /* 非 JSON 响应 */
+        }
+
+        const delFailed =
+          delRes.status !== 404 &&
+          (!delRes.ok || delJson.success === false);
+        if (delFailed) {
+          const msg =
+            (delJson.message as string) ||
+            (delJson.error as string) ||
+            delRaw ||
+            `HTTP ${delRes.status}`;
+          showDialog('删除课程失败', msg, 'error');
+          return;
+        }
+      }
+
+      const impRes = await fetch('/api/courses/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...courseData, course_id: courseIdNormalized }),
+      });
+
+      let impBody: Record<string, unknown> = {};
+      try {
+        impBody = (await impRes.json()) as Record<string, unknown>;
+      } catch {
+        /* ignore */
+      }
+
+      const impOk =
+        impRes.ok &&
+        (impBody.success === undefined || impBody.success === true);
+      if (!impOk) {
+        const msg =
+          (impBody.message as string) ||
+          (impBody.error as string) ||
+          `HTTP ${impRes.status}`;
+        showDialog('导入课程失败', msg, 'error');
+        return;
+      }
+
+      showDialog(
+        '导入成功',
+        ((impBody.message as string) || '已同步到学习助手') as string,
+        'success'
+      );
+    } catch (error) {
+      showDialog(
+        '导入失败',
+        error instanceof Error ? error.message : '网络或服务器错误',
+        'error'
+      );
+    } finally {
+      setIsSubmittingCourse(false);
+    }
+  };
+
+  /** 先 getById：无课程则直接导入；已有则简短确认后再删再导 */
+  const requestSubmitCourseToLibrary = () => {
+    void (async () => {
+      const courseData = methods.getValues();
+      const courseId = (courseData.course_id || '').trim();
+      if (!courseId) {
+        showDialog('提示', '请先填写课程 ID', 'warning');
+        return;
+      }
+
+      const courseIdNormalized = courseIdForApi(courseId);
+
+      try {
+        const res = await fetch('/api/courses/getById', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course_id: courseIdNormalized }),
+        });
+
+        let body: Record<string, unknown> = {};
+        try {
+          body = (await res.json()) as Record<string, unknown>;
+        } catch {
+          /* ignore */
+        }
+
+        if (!res.ok && res.status !== 404) {
+          const msg =
+            (body.message as string) ||
+            (body.error as string) ||
+            `查询课程失败（HTTP ${res.status}）`;
+          showDialog('无法导入', msg, 'error');
+          return;
+        }
+
+        const exists =
+          res.status !== 404 &&
+          res.ok &&
+          body.success === true &&
+          body.data != null &&
+          typeof body.data === 'object';
+
+        if (!exists) {
+          void performSubmitCourseToLibrary({ skipDelete: true });
+          return;
+        }
+
+        const data = body.data as { name?: string };
+        const nameHint = data.name ? `「${data.name}」` : '';
+        showDialog(
+          '导入到学习助手',
+          `学习助手已有该课程${nameHint}，导入将覆盖原有内容。是否继续？`,
+          'confirm',
+          () => void performSubmitCourseToLibrary({ skipDelete: false }),
+          '覆盖并导入',
+          '取消'
+        );
+      } catch (error) {
+        showDialog(
+          '无法导入',
+          error instanceof Error ? error.message : '网络错误',
+          'error'
+        );
+      }
+    })();
+  };
+
   // 另存为JSON文件
   const exportCourseJSON = () => {
     const courseData = methods.getValues();
@@ -1084,7 +1331,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `course-${courseData.id || Date.now()}.json`;
+    a.download = `course-${courseData.course_id || Date.now()}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -1104,8 +1351,8 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
       reader.onload = (event) => {
         try {
           const jsonStr = event.target?.result as string;
-          const data = JSON.parse(jsonStr);
-          methods.reset(data);
+          const data = JSON.parse(jsonStr) as CourseData;
+          methods.reset(sanitizeCourseData(data));
           setAvailableSections([]); // 清空可用sections
           setSelectedWorkspace(''); // 清空工作区选择
           setOpenMode('file');
@@ -1128,13 +1375,19 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
       return;
     }
 
-    // 检查ID是否重复
+    const normalizedSection = sanitizeSection(sectionData);
+
+    // 检查 section_id 是否重复
     const allSectionIds = chapters.flatMap((chapter: Chapter) =>
-      (chapter.sections || []).map((section: Section) => section.id)
+      (chapter.sections || []).map((section: Section) => section.section_id)
     );
 
-    if (allSectionIds.includes(sectionData.id)) {
-      showDialog('ID冲突', `节ID "${sectionData.id}" 已存在，不允许插入重复ID的节！`, 'error');
+    if (allSectionIds.includes(normalizedSection.section_id)) {
+      showDialog(
+        'ID冲突',
+        `节 section_id "${normalizedSection.section_id}" 已存在，不允许插入重复 ID 的节！`,
+        'error'
+      );
       return;
     }
 
@@ -1147,7 +1400,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     const updatedChapters = [...chapters];
     updatedChapters[lastChapterIndex] = {
       ...lastChapter,
-      sections: [...sections, sectionData]
+      sections: [...sections, normalizedSection]
     };
 
     methods.setValue('chapters', updatedChapters);
@@ -1194,13 +1447,14 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     }
   }, [totalSections, recalculateSectionOrders, chapters]);
 
-  // 添加章
+  // 添加章（默认标题写入 JSON，与界面「第N章」一致）
   const handleAddChapter = () => {
     const chapters = methods.getValues('chapters') || [];
+    const nextIndex = chapters.length;
     const newChapter: Chapter = {
-      id: generateUUID(),
-      title: "",
-      order: chapters.length,
+      chapter_id: newStandardUuid(),
+      title: `第${nextIndex + 1}章`,
+      order: nextIndex,
       sections: []
     };
     methods.setValue('chapters', [...chapters, newChapter]);
@@ -1216,7 +1470,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     const sections = chapter.sections || [];
     // order会在recalculateSectionOrders中自动计算
     const newSection: Section = {
-      id: generateUUID(),
+      section_id: newStandardUuid(),
       title: "",
       order: 0, // 临时值，会被自动计算覆盖
       estimated_time: 0,
@@ -1407,6 +1661,19 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
                   title="导出JSON文件"
                 >
                   📥 另存为
+                </button>
+                <button
+                  type="button"
+                  onClick={requestSubmitCourseToLibrary}
+                  disabled={isSubmittingCourse}
+                  className={`px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 ${
+                    isSubmittingCourse
+                      ? 'bg-white/10 cursor-not-allowed opacity-60'
+                      : 'bg-amber-500/90 hover:bg-amber-500'
+                  }`}
+                  title="将查询学习助手是否已有该课程；无则直接导入，有则确认后覆盖导入"
+                >
+                  {isSubmittingCourse ? '导入中…' : '导入学习助手'}
                 </button>
               </div>
 
