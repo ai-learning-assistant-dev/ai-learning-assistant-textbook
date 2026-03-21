@@ -111,26 +111,28 @@ export interface WorkspacesResponse extends ApiResponse {
 
 // 课程数据结构类型定义
 export interface ExerciseOption {
-  id: string;
+  option_id: string;
   text: string;
   is_correct: boolean;
 }
 
 export interface Exercise {
-  id: string;
+  exercise_id: string;
   question: string;
   score: number;
   type: string;
+  /** 简答题的参考答案 */
+  answer?: string;
   options: ExerciseOption[];
 }
 
 export interface LeadingQuestion {
-  id: string;
+  question_id: string;
   question: string;
 }
 
 export interface Section {
-  id: string;
+  section_id: string;
   title: string;
   order: number;
   estimated_time: number;
@@ -140,14 +142,14 @@ export interface Section {
 }
 
 export interface Chapter {
-  id: string;
+  chapter_id: string;
   title: string;
   order: number;
   sections: Section[];
 }
 
 export interface CourseData {
-  id: string;
+  course_id: string;
   title: string;
   description: string;
   icon_url?: string;  // 课程图标，支持base64或URL

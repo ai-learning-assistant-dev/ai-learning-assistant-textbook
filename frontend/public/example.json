@@ -1,43 +1,43 @@
 {
-    "id": "uuidv4",
-    "title": "",
-    "description": "",
-    "chapters": [
+  "course_id": "b0000001-0000-4000-8000-000000000001",
+  "title": "",
+  "description": "",
+  "icon_url": "",
+  "chapters": [
+    {
+      "chapter_id": "b0000001-0000-4000-8000-000000000002",
+      "title": "",
+      "order": 0,
+      "sections": [
         {
-            "id": "uuidv4",
-            "title": "",
-            "order": 0,
-            "sections": [
+          "section_id": "b0000001-0000-4000-8000-000000000003",
+          "title": "",
+          "order": 0,
+          "estimated_time": 0,
+          "video_url": "",
+          "leading_questions": [
+            {
+              "question_id": "b0000001-0000-4000-8000-000000000004",
+              "question": ""
+            }
+          ],
+          "exercises": [
+            {
+              "exercise_id": "b0000001-0000-4000-8000-000000000005",
+              "question": "",
+              "score": 0,
+              "type": "单选",
+              "options": [
                 {
-                    "id": "uuidv4",
-                    "title": "",
-                    "order": 0,
-                    "estimated_time": 0,
-                    "video_url": "",
-                    "leading_questions": [
-                        {
-                            "id": "uuidv4",
-                            "question": ""
-                        }
-                    ],
-                    "exercises": [
-                        {
-                            "id": "uuidv4",
-                            "question": "",
-                            "score": 0,
-                            "type": "单选/简答",
-                            "options": [
-                                {
-                                    "id": "uuidv4",
-                                    "text": "",
-                                    "is_correct": true
-                                }
-                            ]
-                        }
-                    ]
+                  "option_id": "b0000001-0000-4000-8000-000000000006",
+                  "text": "",
+                  "is_correct": true
                 }
-            ]
+              ]
+            }
+          ]
         }
-    ]
+      ]
+    }
+  ]
 }
-
