@@ -3,12 +3,29 @@ import { useForm, useFieldArray, useWatch, FormProvider, useFormContext } from '
 import { v4 as uuidv4 } from 'uuid';
 import {
   CourseData,
+  CourseCategory,
+  COURSE_CATEGORIES,
   Chapter,
   Section,
   Exercise,
   ExerciseOption,
   LeadingQuestion,
 } from '../types';
+
+const DEFAULT_COURSE_CATEGORY: CourseCategory = '职业技能';
+
+/** 始终挂载，保证 category 在任意选中节点下都参与 getValues/另存为 */
+const CategoryHiddenField: React.FC = () => {
+  const { register } = useFormContext();
+  return <input type="hidden" {...register('category')} />;
+};
+
+function normalizeCourseCategory(raw: unknown): CourseCategory {
+  if (typeof raw === 'string' && (COURSE_CATEGORIES as readonly string[]).includes(raw)) {
+    return raw as CourseCategory;
+  }
+  return DEFAULT_COURSE_CATEGORY;
+}
 
 /** 标准 UUID 字符串（含连字符），与 Python str(uuid.uuid4()) 一致 */
 const newStandardUuid = (): string => uuidv4();
@@ -47,6 +64,7 @@ function sanitizeSection(raw: Section): Section {
     order: typeof raw.order === 'number' ? raw.order : 0,
     estimated_time: typeof raw.estimated_time === 'number' ? raw.estimated_time : 0,
     video_url: raw.video_url ?? '',
+    knowledge_content: raw.knowledge_content ?? '',
     leading_questions: (raw.leading_questions ?? []).map(sanitizeLeadingQuestion),
     exercises: (raw.exercises ?? []).map(sanitizeExercise),
   };
@@ -66,6 +84,7 @@ function sanitizeCourseData(data: CourseData): CourseData {
     course_id: data.course_id,
     title: data.title ?? '',
     description: data.description ?? '',
+    category: normalizeCourseCategory((data as Partial<CourseData>).category),
     icon_url: data.icon_url ?? '',
     chapters: (data.chapters ?? []).map(sanitizeChapter),
   };
@@ -387,7 +406,7 @@ interface PropertyEditorProps {
 }
 
 const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType, onDelete }) => {
-  const { register, control } = useFormContext();
+  const { register, control, setValue } = useFormContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // 获取所有章节用于计算索引
@@ -439,6 +458,12 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
     control,
     name: titleWatchPath,
     defaultValue: ''
+  });
+
+  const categoryValue = useWatch({
+    control,
+    name: 'category',
+    defaultValue: DEFAULT_COURSE_CATEGORY,
   });
 
   // 根据activeType和activePath决定使用哪个order值
@@ -564,6 +589,24 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">课程分类</label>
+            <select
+              value={normalizeCourseCategory(categoryValue)}
+              onChange={(e) =>
+                setValue('category', e.target.value as CourseCategory, {
+                  shouldDirty: true,
+                })
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            >
+              {COURSE_CATEGORIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
           
           {/* 课程图标上传 */}
           <CourseIconUploader activePath="root" />
@@ -648,6 +691,20 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
               placeholder="https://..."
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              知识全文（Markdown）
+            </label>
+            <textarea
+              {...register(`${activePath}.knowledge_content`)}
+              rows={28}
+              placeholder="支持 Markdown，可与生成管线产出的全文总结一致..."
+              className="w-full min-h-[min(70vh,36rem)] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm resize-y"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              保存课程到工作区时，将随节数据一并写入 course.json。
+            </p>
           </div>
 
           <hr className="my-6 border-gray-200" />
@@ -1060,12 +1117,14 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
         course_id: newStandardUuid(),
         title: "",
         description: "",
+        category: DEFAULT_COURSE_CATEGORY,
         icon_url: "",
         chapters: []
       };
 
   const methods = useForm<CourseData>({
-    defaultValues
+    defaultValues,
+    shouldUnregister: false,
   });
 
   // 当initialData变化时，更新表单数据
@@ -1129,6 +1188,15 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
 
   const { control } = methods;
 
+  /** 与另存为/导入学习助手共用：保证 category 写入快照（含 normalize 默认值） */
+  const getSanitizedCoursePayload = (): CourseData => {
+    const raw = methods.getValues();
+    return sanitizeCourseData({
+      ...raw,
+      category: raw.category ?? methods.getValues('category'),
+    });
+  };
+
   // 从工作区加载课程和sections
   const loadCourseFromWorkspace = async (workspaceName: string) => {
     try {
@@ -1154,7 +1222,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
       return;
     }
 
-    const courseData = methods.getValues();
+    const courseData = getSanitizedCoursePayload();
     try {
       const response = await fetch(`/api/course/${selectedWorkspace}`, {
         method: 'POST',
@@ -1175,7 +1243,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
 
   /** 导入到学习助手；覆盖场景下可先 delete 再 import，新课程可跳过 delete */
   const performSubmitCourseToLibrary = async (options?: { skipDelete?: boolean }) => {
-    const courseData = methods.getValues();
+    const courseData = getSanitizedCoursePayload();
     const courseId = (courseData.course_id || '').trim();
     if (!courseId) {
       showDialog('提示', '请先填写课程 ID', 'warning');
@@ -1325,7 +1393,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
 
   // 另存为JSON文件
   const exportCourseJSON = () => {
-    const courseData = methods.getValues();
+    const courseData = getSanitizedCoursePayload();
     const jsonStr = JSON.stringify(courseData, null, 2);
     const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -1475,6 +1543,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
       order: 0, // 临时值，会被自动计算覆盖
       estimated_time: 0,
       video_url: "",
+      knowledge_content: '',
       leading_questions: [],
       exercises: []
     };
@@ -1629,6 +1698,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
 
   return (
     <FormProvider {...methods}>
+      <CategoryHiddenField />
       <div className="flex flex-col h-screen bg-white">
         <header className="px-6 py-4 border-b border-gray-300 bg-gradient-to-r from-blue-500 to-indigo-600 text-white">
           <div className="flex justify-between items-center">

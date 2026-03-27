@@ -81,6 +81,7 @@ def create_empty_course(title: str, description: str = "") -> dict:
         "course_id": str(uuid.uuid4()),
         "title": title,
         "description": description,
+        "category": "职业技能",
         "icon_url": "",
         "chapters": []
     }
@@ -93,6 +94,7 @@ EXAMPLE_COURSE = {
     "course_id": "uuidv4",
     "title": "计算机原理通识",
     "description": "计算机原理通识课程，适合初学者学习",
+    "category": "职业技能",
     "icon_url": "",
     "chapters": [
         {

@@ -26,6 +26,10 @@ from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
 from define import create_empty_course
 
+# course.json 中 category 允许的取值（与前端一致）；缺失或非法时保存前补为默认值
+_COURSE_CATEGORIES_ALLOWED = frozenset({'职业技能', '文化基础', '工具使用', '人文素养'})
+_DEFAULT_COURSE_CATEGORY = '职业技能'
+
 # 确定模板目录
 if getattr(sys, 'frozen', False):
     # 如果是PyInstaller打包环境
@@ -1452,6 +1456,10 @@ def save_course(workspace_name):
                 'success': False,
                 'error': '缺少course数据'
             }), 400
+
+        cat = course_data.get('category')
+        if cat not in _COURSE_CATEGORIES_ALLOWED:
+            course_data['category'] = _DEFAULT_COURSE_CATEGORY
         
         # 保存course.json文件（覆盖原有文件）
         course_file = os.path.join(workspace_path, 'course.json')

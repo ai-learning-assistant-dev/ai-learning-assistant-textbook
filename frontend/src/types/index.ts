@@ -137,6 +137,8 @@ export interface Section {
   order: number;
   estimated_time: number;
   video_url: string;
+  /** 完整知识内容（通常为 Markdown），与生成管线中的全文总结一致 */
+  knowledge_content?: string;
   leading_questions: LeadingQuestion[];
   exercises: Exercise[];
 }
@@ -148,10 +150,26 @@ export interface Chapter {
   sections: Section[];
 }
 
+/** course.json 中课程分类，仅允许以下取值 */
+export type CourseCategory =
+  | '职业技能'
+  | '文化基础'
+  | '工具使用'
+  | '人文素养';
+
+export const COURSE_CATEGORIES: readonly CourseCategory[] = [
+  '职业技能',
+  '文化基础',
+  '工具使用',
+  '人文素养',
+] as const;
+
 export interface CourseData {
   course_id: string;
   title: string;
   description: string;
+  /** 课程分类，默认「职业技能」 */
+  category: CourseCategory;
   icon_url?: string;  // 课程图标，支持base64或URL
   chapters: Chapter[];
 }
