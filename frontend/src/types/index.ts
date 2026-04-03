@@ -150,6 +150,13 @@ export interface Chapter {
   sections: Section[];
 }
 
+export interface AiPersona {
+  persona_id: string;
+  name: string;
+  prompt: string;
+  is_default_template: boolean;
+}
+
 /** course.json 中课程分类，仅允许以下取值 */
 export type CourseCategory =
   | '职业技能'
@@ -168,6 +175,10 @@ export interface CourseData {
   course_id: string;
   title: string;
   description: string;
+  /** 课程 AI 人设，导入学习助手时按对象结构提交 */
+  ai_persona: AiPersona;
+  /** 兼容历史字段（旧版仅有字符串人设） */
+  teacher_persona?: string;
   /** 课程分类，默认「职业技能」 */
   category: CourseCategory;
   icon_url?: string;  // 课程图标，支持base64或URL

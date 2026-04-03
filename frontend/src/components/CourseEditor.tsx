@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useForm, useFieldArray, useWatch, FormProvider, useFormContext } from 'react-hook-form';
 import { v4 as uuidv4 } from 'uuid';
 import {
+  AiPersona,
   CourseData,
   CourseCategory,
   COURSE_CATEGORIES,
@@ -27,8 +28,12 @@ function normalizeCourseCategory(raw: unknown): CourseCategory {
   return DEFAULT_COURSE_CATEGORY;
 }
 
-/** 标准 UUID 字符串（含连字符），与 Python str(uuid.uuid4()) 一致 */
-const newStandardUuid = (): string => uuidv4();
+const createDefaultAiPersona = (courseTitle = '', prompt = ''): AiPersona => ({
+  persona_id: uuidv4(),
+  name: (courseTitle || '').trim() || 'default',
+  prompt,
+  is_default_template: true,
+});
 
 /** 不兼容旧版 JSON（含通用 id 字段）；仅整理缺省的非主键字段，主键须已为 course_id / chapter_id 等 */
 function sanitizeLeadingQuestion(r: LeadingQuestion): LeadingQuestion {
@@ -79,12 +84,32 @@ function sanitizeChapter(raw: Chapter): Chapter {
   };
 }
 
-function sanitizeCourseData(data: CourseData): CourseData {
+function sanitizeAiPersona(raw: unknown, courseTitle?: string, legacyTeacherPersona?: string): AiPersona {
+  const fallback = createDefaultAiPersona((courseTitle ?? '').trim(), (legacyTeacherPersona ?? '').trim());
+  if (!raw || typeof raw !== 'object') {
+    return fallback;
+  }
+
+  const r = raw as Partial<AiPersona>;
   return {
-    course_id: data.course_id,
+    persona_id:
+      typeof r.persona_id === 'string' && r.persona_id.trim()
+        ? r.persona_id.trim()
+        : fallback.persona_id,
+    name: typeof r.name === 'string' && r.name.trim() ? r.name.trim() : fallback.name,
+    prompt: typeof r.prompt === 'string' ? r.prompt : fallback.prompt,
+    is_default_template:
+      typeof r.is_default_template === 'boolean' ? r.is_default_template : fallback.is_default_template,
+  };
+}
+
+function sanitizeCourseData(data: Partial<CourseData>): CourseData {
+  return {
+    course_id: data.course_id ?? uuidv4(),
     title: data.title ?? '',
     description: data.description ?? '',
-    category: normalizeCourseCategory((data as Partial<CourseData>).category),
+    ai_persona: sanitizeAiPersona(data.ai_persona, data.title, data.teacher_persona),
+    category: normalizeCourseCategory(data.category),
     icon_url: data.icon_url ?? '',
     chapters: (data.chapters ?? []).map(sanitizeChapter),
   };
@@ -590,6 +615,33 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              AI 人设配置
+              <span className="text-xs text-gray-500 font-normal ml-2">将按 ai_persona 对象格式保存和导入学习助手</span>
+            </label>
+            {/* 隐藏字段：保留结构完整性，但不在前端展示 */}
+            <input type="hidden" {...register('ai_persona.persona_id')} />
+            <input type="hidden" {...register('ai_persona.is_default_template')} value="true" />
+            <div>
+              <label className="block text-xs text-gray-600 mb-1">name</label>
+              <input
+                {...register('ai_persona.name')}
+                placeholder="例如：严谨导师"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="mt-3">
+              <label className="block text-xs text-gray-600 mb-1">prompt</label>
+              <textarea
+                {...register('ai_persona.prompt')}
+                rows={4}
+                placeholder="例如：你是一名严谨、耐心的学习导师，回答应结构化并给出下一步建议。"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">persona_id 自动保留，is_default_template 默认按 true 保存。</p>
+          </div>
+          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">课程分类</label>
             <select
               value={normalizeCourseCategory(categoryValue)}
@@ -607,9 +659,9 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
               ))}
             </select>
           </div>
-          
+
           {/* 课程图标上传 */}
-          <CourseIconUploader activePath="root" />
+          <CourseIconUploader />
         </div>
       )}
 
@@ -725,14 +777,10 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
 // ---------------------------------------------------------
 // 子组件：课程图标上传器
 // ---------------------------------------------------------
-interface CourseIconUploaderProps {
-  activePath: string;
-}
-
-const CourseIconUploader: React.FC<CourseIconUploaderProps> = ({ activePath }) => {
+const CourseIconUploader: React.FC = () => {
   const { register, control, setValue } = useFormContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // 监听icon_url的变化以实时预览
   const iconUrl = useWatch({
     control,
@@ -862,7 +910,7 @@ const LeadingQuestionsManager: React.FC<LeadingQuestionsManagerProps> = ({ activ
         <h3 className="text-lg font-semibold">引导问题</h3>
         <button
           type="button"
-          onClick={() => append({ question_id: newStandardUuid(), question: "" })}
+          onClick={() => append({ question_id: uuidv4(), question: "" })}
           className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
         >
           + 添加问题
@@ -917,7 +965,7 @@ const ExercisesManager: React.FC<ExercisesManagerProps> = ({ activePath }) => {
         <button
           type="button"
           onClick={() => append({
-            exercise_id: newStandardUuid(),
+            exercise_id: uuidv4(),
             question: "",
             score: 0,
             type: "单选",
@@ -1019,7 +1067,7 @@ const ExerciseItem: React.FC<ExerciseItemProps> = ({ activePath, index, onRemove
             <span className="text-sm font-medium">选项</span>
             <button
               type="button"
-              onClick={() => append({ option_id: newStandardUuid(), text: "", is_correct: false })}
+              onClick={() => append({ option_id: uuidv4(), text: "", is_correct: false })}
               className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs"
             >
               + 添加选项
@@ -1110,17 +1158,18 @@ interface CourseEditorProps {
   workspaces?: Array<{ name: string; path: string }>;
 }
 
-const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, workspaces = [] }) => {
-    const defaultValues: CourseData = initialData
+const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSave, workspaces = [] }) => {
+  const defaultValues: CourseData = initialData
     ? sanitizeCourseData(initialData)
     : {
-        course_id: newStandardUuid(),
-        title: "",
-        description: "",
-        category: DEFAULT_COURSE_CATEGORY,
-        icon_url: "",
-        chapters: []
-      };
+      course_id: uuidv4(),
+      title: "",
+      description: "",
+      ai_persona: createDefaultAiPersona(""),
+      category: DEFAULT_COURSE_CATEGORY,
+      icon_url: "",
+      chapters: []
+    };
 
   const methods = useForm<CourseData>({
     defaultValues,
@@ -1520,7 +1569,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     const chapters = methods.getValues('chapters') || [];
     const nextIndex = chapters.length;
     const newChapter: Chapter = {
-      chapter_id: newStandardUuid(),
+      chapter_id: uuidv4(),
       title: `第${nextIndex + 1}章`,
       order: nextIndex,
       sections: []
@@ -1538,7 +1587,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
     const sections = chapter.sections || [];
     // order会在recalculateSectionOrders中自动计算
     const newSection: Section = {
-      section_id: newStandardUuid(),
+      section_id: uuidv4(),
       title: "",
       order: 0, // 临时值，会被自动计算覆盖
       estimated_time: 0,
@@ -1736,11 +1785,10 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave, worksp
                   type="button"
                   onClick={requestSubmitCourseToLibrary}
                   disabled={isSubmittingCourse}
-                  className={`px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 ${
-                    isSubmittingCourse
-                      ? 'bg-white/10 cursor-not-allowed opacity-60'
-                      : 'bg-amber-500/90 hover:bg-amber-500'
-                  }`}
+                  className={`px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 ${isSubmittingCourse
+                    ? 'bg-white/10 cursor-not-allowed opacity-60'
+                    : 'bg-amber-500/90 hover:bg-amber-500'
+                    }`}
                   title="将查询学习助手是否已有该课程；无则直接导入，有则确认后覆盖导入"
                 >
                   {isSubmittingCourse ? '导入中…' : '导入学习助手'}
