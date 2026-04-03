@@ -81,6 +81,12 @@ def create_empty_course(title: str, description: str = "") -> dict:
         "course_id": str(uuid.uuid4()),
         "title": title,
         "description": description,
+        "ai_persona": {
+            "persona_id": str(uuid.uuid4()),
+            "name": title,
+            "prompt": "",
+            "is_default_template": True
+        },
         "category": "职业技能",
         "icon_url": "",
         "chapters": []
