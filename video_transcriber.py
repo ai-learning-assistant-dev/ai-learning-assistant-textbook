@@ -7,8 +7,17 @@
 import os
 import sys
 import time
+import re
+import subprocess
+import tempfile
 from pathlib import Path
+import requests
 import yt_dlp
+
+# Keep local ASR stable when multiple numeric runtimes are present in the same environment.
+os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
 from faster_whisper import WhisperModel
 from modelscope.hub.snapshot_download import snapshot_download
 
@@ -78,7 +87,159 @@ try:
 except Exception as e:
     print(f"警告: 添加NVIDIA库路径失败: {e}")
 
-def download_audio(video_url, output_path, ffmpeg_path=None):
+def _resolve_ffmpeg_executable(ffmpeg_path=None):
+    if ffmpeg_path and os.path.exists(ffmpeg_path):
+        abs_path = os.path.abspath(ffmpeg_path)
+        if os.path.isdir(abs_path):
+            for candidate in (
+                os.path.join(abs_path, "ffmpeg.exe"),
+                os.path.join(abs_path, "bin", "ffmpeg.exe"),
+                os.path.join(abs_path, "ffmpeg"),
+                os.path.join(abs_path, "bin", "ffmpeg"),
+            ):
+                if os.path.exists(candidate):
+                    return candidate
+        return abs_path
+    return "ffmpeg"
+
+
+def _write_netscape_cookie_file(cookies):
+    if not cookies:
+        return None
+    pairs = []
+    for key in ("SESSDATA", "bili_jct", "buvid3"):
+        value = cookies.get(key)
+        if value:
+            pairs.append((key, value))
+    if not pairs:
+        return None
+    fd, cookie_path = tempfile.mkstemp(prefix="bilibili-", suffix=".cookies.txt")
+    os.close(fd)
+    with open(cookie_path, "w", encoding="utf-8") as f:
+        f.write("# Netscape HTTP Cookie File\n")
+        for key, value in pairs:
+            f.write(f".bilibili.com\tTRUE\t/\tFALSE\t0\t{key}\t{value}\n")
+    return cookie_path
+
+
+def _extract_bvid(video_url):
+    match = re.search(r"BV[a-zA-Z0-9]+", video_url or "")
+    return match.group(0) if match else None
+
+
+def _download_audio_via_bilibili_api(video_url, output_path, ffmpeg_path=None, cookies=None, headers=None, bvid=None, cid=None):
+    bvid = bvid or _extract_bvid(video_url)
+    if not bvid or not cid:
+        print("B站API音频兜底失败: 缺少 bvid 或 cid")
+        return False
+
+    request_headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer": "https://www.bilibili.com/",
+        "Origin": "https://www.bilibili.com",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+    }
+    if headers:
+        request_headers.update({key: value for key, value in headers.items() if value})
+
+    try:
+        response = requests.get(
+            "https://api.bilibili.com/x/player/playurl",
+            params={"bvid": bvid, "cid": cid, "qn": 0, "fnval": 16, "fourk": 1},
+            headers=request_headers,
+            cookies=cookies or {},
+            timeout=15,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if data.get("code") != 0:
+            print(f"B站API音频兜底失败: {data.get('message')}")
+            return False
+
+        audios = (((data.get("data") or {}).get("dash") or {}).get("audio") or [])
+        if not audios:
+            print("B站API音频兜底失败: 未找到音频流")
+            return False
+
+        audio = max(audios, key=lambda item: item.get("bandwidth") or 0)
+        audio_urls = [audio.get("baseUrl") or audio.get("base_url")]
+        audio_urls.extend(audio.get("backupUrl") or audio.get("backup_url") or [])
+        audio_urls = [url for url in audio_urls if url]
+
+        temp_audio = None
+        for audio_url in audio_urls:
+            try:
+                fd, temp_audio = tempfile.mkstemp(prefix="bilibili-audio-", suffix=".m4s")
+                os.close(fd)
+                stream_headers = dict(request_headers)
+                stream_headers["Referer"] = f"https://www.bilibili.com/video/{bvid}/"
+                with requests.get(audio_url, headers=stream_headers, cookies=cookies or {}, stream=True, timeout=30) as stream:
+                    stream.raise_for_status()
+                    with open(temp_audio, "wb") as f:
+                        for chunk in stream.iter_content(chunk_size=1024 * 256):
+                            if chunk:
+                                f.write(chunk)
+                if os.path.getsize(temp_audio) > 0:
+                    break
+            except Exception as stream_error:
+                print(f"B站音频直链下载失败，尝试备用链接: {stream_error}")
+                if temp_audio and os.path.exists(temp_audio):
+                    try:
+                        os.remove(temp_audio)
+                    except OSError:
+                        pass
+                temp_audio = None
+
+        if not temp_audio or not os.path.exists(temp_audio):
+            print("B站API音频兜底失败: 音频直链全部下载失败")
+            return False
+
+        expected_path = str(Path(output_path).with_suffix(".mp3"))
+        result = subprocess.run(
+            [
+                _resolve_ffmpeg_executable(ffmpeg_path),
+                "-y",
+                "-i",
+                temp_audio,
+                "-vn",
+                "-acodec",
+                "libmp3lame",
+                "-b:a",
+                "192k",
+                expected_path,
+            ],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+        try:
+            os.remove(temp_audio)
+        except OSError:
+            pass
+
+        if result.returncode != 0:
+            print(f"FFmpeg转换音频失败: {result.stderr[-1000:]}")
+            return False
+
+        if os.path.exists(expected_path) and os.path.getsize(expected_path) > 0:
+            if output_path != expected_path:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                os.rename(expected_path, output_path)
+            print("B站API音频兜底下载成功")
+            return True
+
+        print("B站API音频兜底失败: 未生成有效mp3文件")
+        return False
+    except Exception as e:
+        print(f"B站API音频兜底失败: {e}")
+        return False
+
+
+def _download_audio_yt_dlp_legacy(video_url, output_path, ffmpeg_path=None, cookies=None, headers=None, bvid=None, cid=None):
     """
     使用yt-dlp下载视频的音频部分
     
@@ -115,14 +276,22 @@ def download_audio(video_url, output_path, ffmpeg_path=None):
         # B站特定配置，防止403
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Referer': 'https://www.bilibili.com',
+            'Referer': 'https://www.bilibili.com/',
+            'Origin': 'https://www.bilibili.com',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
         }
     }
+    if headers:
+        ydl_opts['http_headers'].update({key: value for key, value in headers.items() if value})
     
     # 如果指定了ffmpeg路径，添加到配置中
     if ffmpeg_path and os.path.exists(ffmpeg_path):
         print(f"使用自定义FFmpeg路径: {os.path.abspath(ffmpeg_path)}")
         ydl_opts['ffmpeg_location'] = os.path.abspath(ffmpeg_path)
+
+    cookie_file = _write_netscape_cookie_file(cookies)
+    if cookie_file:
+        ydl_opts['cookiefile'] = cookie_file
     
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -142,6 +311,86 @@ def download_audio(video_url, output_path, ffmpeg_path=None):
     except Exception as e:
         print(f"音频下载失败: {e}")
         return False
+
+def download_audio(video_url, output_path, ffmpeg_path=None, cookies=None, headers=None, bvid=None, cid=None):
+    """
+    使用 yt-dlp 下载视频音频；如果页面入口下载失败，则用 B 站播放地址 API 兜底。
+    """
+    print(f"正在下载音频: {video_url}")
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'outtmpl': str(Path(output_path).with_suffix('')),
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'quiet': False,
+        'no_warnings': False,
+        'overwrites': True,
+        'force_overwrites': True,
+        'playlist_items': '1',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Referer': 'https://www.bilibili.com/',
+            'Origin': 'https://www.bilibili.com',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+        }
+    }
+    if headers:
+        ydl_opts['http_headers'].update({key: value for key, value in headers.items() if value})
+
+    if ffmpeg_path and os.path.exists(ffmpeg_path):
+        print(f"使用自定义FFmpeg路径: {os.path.abspath(ffmpeg_path)}")
+        ydl_opts['ffmpeg_location'] = os.path.abspath(ffmpeg_path)
+
+    cookie_file = _write_netscape_cookie_file(cookies)
+    if cookie_file:
+        ydl_opts['cookiefile'] = cookie_file
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([video_url])
+
+        expected_path = str(Path(output_path).with_suffix('.mp3'))
+        if os.path.exists(expected_path):
+            if output_path != expected_path:
+                if os.path.exists(output_path):
+                    os.remove(output_path)
+                os.rename(expected_path, output_path)
+            return True
+
+        print("yt-dlp未生成音频文件，尝试使用B站播放地址API兜底下载音频...")
+        return _download_audio_via_bilibili_api(
+            video_url,
+            output_path,
+            ffmpeg_path=ffmpeg_path,
+            cookies=cookies,
+            headers=headers,
+            bvid=bvid,
+            cid=cid,
+        )
+    except Exception as e:
+        print(f"音频下载失败: {e}")
+        print("尝试使用B站播放地址API兜底下载音频...")
+        return _download_audio_via_bilibili_api(
+            video_url,
+            output_path,
+            ffmpeg_path=ffmpeg_path,
+            cookies=cookies,
+            headers=headers,
+            bvid=bvid,
+            cid=cid,
+        )
+    finally:
+        if cookie_file and os.path.exists(cookie_file):
+            try:
+                os.remove(cookie_file)
+            except OSError:
+                pass
+
 
 def get_model_path(model_size="small", models_dir="models"):
     """

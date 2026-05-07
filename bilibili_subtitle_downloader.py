@@ -1013,7 +1013,15 @@ class BilibiliSubtitleDownloader:
                     srt_path = os.path.join(video_dir, srt_filename)
                     
                     # 下载音频
-                    if video_transcriber.download_audio(target_url, audio_path, self.ffmpeg_path):
+                    if video_transcriber.download_audio(
+                        target_url,
+                        audio_path,
+                        self.ffmpeg_path,
+                        cookies=self.cookies,
+                        headers=self.headers,
+                        bvid=main_bvid,
+                        cid=cid,
+                    ):
 
                         print("正在生成...")
                         sys.stdout.flush()
@@ -1040,7 +1048,11 @@ class BilibiliSubtitleDownloader:
                         try:
                             # 运行子进程
                             # 注意：即使子进程Crash（返回非0），只要SRT文件生成了，我们也视为成功
-                            result_proc = subprocess.run(cmd, check=False)
+                            transcribe_env = os.environ.copy()
+                            transcribe_env.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
+                            transcribe_env.setdefault("OMP_NUM_THREADS", "1")
+                            transcribe_env.setdefault("PYTHONIOENCODING", "utf-8")
+                            result_proc = subprocess.run(cmd, check=False, env=transcribe_env)
                             
                             if os.path.exists(srt_path) and os.path.getsize(srt_path) > 0:
                                 print(f"成功生成 {srt_filename}")
@@ -1211,7 +1223,5 @@ def main():
 
 if __name__ == '__main__':
     main()
-
-
 
 
