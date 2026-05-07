@@ -17,7 +17,7 @@ export default defineConfig({
                 secure: false,
             },
             '/api': {
-                target: 'http://localhost:5000', // 后端服务地址，根据实际情况修改
+                target: 'http://localhost:7200', // 后端服务地址，根据实际情况修改
                 changeOrigin: true,
                 secure: false,
             },

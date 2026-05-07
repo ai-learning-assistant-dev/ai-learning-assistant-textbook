@@ -14,7 +14,7 @@ npm install
 
 ### 2. 配置后端API地址
 
-项目默认将 `/api` 请求代理到 `http://localhost:5000`。
+项目默认将 `/api` 请求代理到 `http://localhost:7200`。
 
 如果你的后端服务运行在不同的端口，请修改 `vite.config.js` 中的代理配置：
 

@@ -96,12 +96,12 @@ def load_app_config():
         'last_workspace_name': '',
         'cookies_file': 'cookies.txt',
         'auto_refresh_interval': 2000,
-        'web_port': 5000,
+        'web_port': 7200,
         'download_all_parts': False,  # 默认关闭：只下载URL指定的视频，不下载所有分P
         'max_concurrent_tasks': 2,  # 最大并发任务数：默认同时处理2个视频（避免API并发过高）
         'ffmpeg_path': 'ffmpeg',
         # 课程库 HTTP 服务（提交课程、删除课程）；前端 POST /api/courses/* 由本服务转发至此
-        'courses_api_base': 'http://127.0.0.1:3000',
+        'courses_api_base': 'http://127.0.0.1:7100',
     }
     
     if not os.path.exists(config_file):
@@ -1338,6 +1338,8 @@ def update_app_config():
             config['download_all_parts'] = data['download_all_parts']
         if 'max_concurrent_tasks' in data:
             config['max_concurrent_tasks'] = data['max_concurrent_tasks']
+        if 'courses_api_base' in data:
+            config['courses_api_base'] = str(data['courses_api_base']).strip().rstrip('/')
         
         # 保存配置
         save_app_config(config)
@@ -1478,8 +1480,8 @@ def save_course(workspace_name):
 
 
 def _courses_api_base_url():
-    base = (load_app_config().get('courses_api_base') or 'http://127.0.0.1:3000').strip().rstrip('/')
-    return base or 'http://127.0.0.1:3000'
+    base = (load_app_config().get('courses_api_base') or 'http://127.0.0.1:7100').strip().rstrip('/')
+    return base or 'http://127.0.0.1:7100'
 
 
 def _proxy_post_to_courses_api(upstream_path: str):
@@ -1489,6 +1491,8 @@ def _proxy_post_to_courses_api(upstream_path: str):
     说明：static_url_path='' 时，未注册的路径会落到静态文件规则上，仅允许 GET，POST 会得到 405。
     """
     url = _courses_api_base_url() + upstream_path
+    if request.query_string:
+        url = f"{url}?{request.query_string.decode('utf-8')}"
     payload = request.get_data()
     req = urllib.request.Request(url, data=payload, method='POST')
     ct = request.headers.get('Content-Type')
@@ -1524,6 +1528,31 @@ def courses_get_by_id_proxy():
     return _proxy_post_to_courses_api('/api/courses/getById')
 
 
+@app.route('/api/courses/search', methods=['POST'])
+def courses_search_proxy():
+    return _proxy_post_to_courses_api('/api/courses/search')
+
+
+@app.route('/api/courses/getCourseChaptersSections', methods=['POST'])
+def courses_get_chapters_sections_proxy():
+    return _proxy_post_to_courses_api('/api/courses/getCourseChaptersSections')
+
+
+@app.route('/api/exercises/getExercisesWithOptionsBySection', methods=['POST'])
+def exercises_get_with_options_by_section_proxy():
+    return _proxy_post_to_courses_api('/api/exercises/getExercisesWithOptionsBySection')
+
+
+@app.route('/api/leading-questions/searchBySection', methods=['POST'])
+def leading_questions_search_by_section_proxy():
+    return _proxy_post_to_courses_api('/api/leading-questions/searchBySection')
+
+
+@app.route('/api/ai-personas/getById', methods=['POST'])
+def ai_personas_get_by_id_proxy():
+    return _proxy_post_to_courses_api('/api/ai-personas/getById')
+
+
 if __name__ == '__main__':
     # 确保必要的目录存在
     os.makedirs('config', exist_ok=True)
@@ -1532,7 +1561,7 @@ if __name__ == '__main__':
     
     # 加载配置获取端口和并发数
     config = load_app_config()
-    port = config.get('web_port', 5000)
+    port = config.get('web_port', 7200)
     max_concurrent = config.get('max_concurrent_tasks', MAX_CONCURRENT_TASKS)
     
     print("=" * 80)

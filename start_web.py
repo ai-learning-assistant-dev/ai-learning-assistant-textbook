@@ -63,7 +63,7 @@ def check_config():
             'last_selected_model': '',
             'cookies_file': 'cookies.txt',
             'auto_refresh_interval': 2000,
-            'web_port': 5000
+            'web_port': 7200
         }
         with open('config/app_config.json', 'w', encoding='utf-8') as f:
             json.dump(default_config, f, ensure_ascii=False, indent=2)
@@ -101,12 +101,12 @@ def main():
     # 加载配置获取端口
     import json
     config_file = 'config/app_config.json'
-    port = 5000
+    port = 7200
     if os.path.exists(config_file):
         try:
             with open(config_file, 'r', encoding='utf-8') as f:
                 config = json.load(f)
-                port = config.get('web_port', 5000)
+                port = config.get('web_port', 7200)
         except:
             pass
     
@@ -150,4 +150,3 @@ if __name__ == '__main__':
         import traceback
         traceback.print_exc()
         sys.exit(1)
-

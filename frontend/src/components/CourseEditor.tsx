@@ -10,8 +10,12 @@ import {
   Section,
   Exercise,
   ExerciseOption,
+  KnowledgePoint,
+  KnowledgePoints,
   LeadingQuestion,
+  VideoSubtitle,
 } from '../types';
+import CourseLibraryManager from './CourseLibraryManager';
 
 const DEFAULT_COURSE_CATEGORY: CourseCategory = '职业技能';
 
@@ -35,25 +39,34 @@ const createDefaultAiPersona = (courseTitle = '', prompt = ''): AiPersona => ({
   is_default_template: true,
 });
 
-/** 不兼容旧版 JSON（含通用 id 字段）；仅整理缺省的非主键字段，主键须已为 course_id / chapter_id 等 */
+function readStringId(raw: unknown, primaryKey: string): string {
+  if (!raw || typeof raw !== 'object') return uuidv4();
+  const record = raw as Record<string, unknown>;
+  const value = record[primaryKey] ?? record.id;
+  return typeof value === 'string' && value.trim() ? value.trim() : uuidv4();
+}
+
 function sanitizeLeadingQuestion(r: LeadingQuestion): LeadingQuestion {
+  const raw = r as LeadingQuestion & { id?: string };
   return {
-    question_id: r.question_id,
+    question_id: raw.question_id || raw.id || uuidv4(),
     question: r.question ?? '',
   };
 }
 
 function sanitizeExerciseOption(r: ExerciseOption): ExerciseOption {
+  const raw = r as ExerciseOption & { id?: string };
   return {
-    option_id: r.option_id,
+    option_id: raw.option_id || raw.id || uuidv4(),
     text: r.text ?? '',
     is_correct: !!r.is_correct,
   };
 }
 
 function sanitizeExercise(r: Exercise): Exercise {
+  const raw = r as Exercise & { id?: string };
   return {
-    exercise_id: r.exercise_id,
+    exercise_id: raw.exercise_id || raw.id || uuidv4(),
     question: r.question ?? '',
     score: typeof r.score === 'number' ? r.score : 0,
     type: r.type ?? '单选',
@@ -62,14 +75,60 @@ function sanitizeExercise(r: Exercise): Exercise {
   };
 }
 
+function sanitizeKnowledgePoint(raw: unknown): KnowledgePoint {
+  if (!raw || typeof raw !== 'object') {
+    return { title: '', description: '', time: '' };
+  }
+  const record = raw as Partial<KnowledgePoint>;
+  return {
+    title: typeof record.title === 'string' ? record.title : '',
+    description: typeof record.description === 'string' ? record.description : '',
+    time: typeof record.time === 'string' ? record.time : '',
+  };
+}
+
+function normalizeKnowledgePoints(raw: unknown): KnowledgePoints {
+  if (Array.isArray(raw)) {
+    return { key_points: raw.map(sanitizeKnowledgePoint) };
+  }
+  if (!raw || typeof raw !== 'object') {
+    return { key_points: [] };
+  }
+  const record = raw as { key_points?: unknown };
+  if (Array.isArray(record.key_points)) {
+    return { key_points: record.key_points.map(sanitizeKnowledgePoint) };
+  }
+  return { key_points: [] };
+}
+
+function sanitizeVideoSubtitle(raw: unknown, index: number): VideoSubtitle {
+  if (!raw || typeof raw !== 'object') {
+    return { seq: index + 1, start: '', end: '', text: '' };
+  }
+  const record = raw as Partial<VideoSubtitle>;
+  return {
+    seq: typeof record.seq === 'number' && Number.isFinite(record.seq) ? record.seq : index + 1,
+    start: typeof record.start === 'string' ? record.start : '',
+    end: typeof record.end === 'string' ? record.end : '',
+    text: typeof record.text === 'string' ? record.text : '',
+  };
+}
+
+function normalizeVideoSubtitles(raw: unknown): VideoSubtitle[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(sanitizeVideoSubtitle);
+}
+
 function sanitizeSection(raw: Section): Section {
   return {
-    section_id: raw.section_id,
+    section_id: readStringId(raw, 'section_id'),
     title: raw.title ?? '',
     order: typeof raw.order === 'number' ? raw.order : 0,
     estimated_time: typeof raw.estimated_time === 'number' ? raw.estimated_time : 0,
     video_url: raw.video_url ?? '',
     knowledge_content: raw.knowledge_content ?? '',
+    knowledge_points: normalizeKnowledgePoints(raw.knowledge_points),
+    video_subtitles: normalizeVideoSubtitles(raw.video_subtitles),
     leading_questions: (raw.leading_questions ?? []).map(sanitizeLeadingQuestion),
     exercises: (raw.exercises ?? []).map(sanitizeExercise),
   };
@@ -77,7 +136,7 @@ function sanitizeSection(raw: Section): Section {
 
 function sanitizeChapter(raw: Chapter): Chapter {
   return {
-    chapter_id: raw.chapter_id,
+    chapter_id: readStringId(raw, 'chapter_id'),
     title: raw.title ?? '',
     order: typeof raw.order === 'number' ? raw.order : 0,
     sections: (raw.sections ?? []).map(sanitizeSection),
@@ -104,12 +163,14 @@ function sanitizeAiPersona(raw: unknown, courseTitle?: string, legacyTeacherPers
 }
 
 function sanitizeCourseData(data: Partial<CourseData>): CourseData {
+  const raw = data as Partial<CourseData> & { id?: string };
   return {
-    course_id: data.course_id ?? uuidv4(),
+    course_id: data.course_id || raw.id || uuidv4(),
     title: data.title ?? '',
     description: data.description ?? '',
     ai_persona: sanitizeAiPersona(data.ai_persona, data.title, data.teacher_persona),
     category: normalizeCourseCategory(data.category),
+    contributors: data.contributors ?? '志愿者',
     icon_url: data.icon_url ?? '',
     chapters: (data.chapters ?? []).map(sanitizeChapter),
   };
@@ -119,16 +180,6 @@ function sanitizeCourseData(data: Partial<CourseData>): CourseData {
  * 学习助手 delete/import 使用带连字符的标准 UUID。
  * 若 course_id 为 32 位 hex（无连字符），格式化为 8-4-4-4-12；已为 UUID 则规范化小写后原样使用。
  */
-function courseIdForApi(raw: string): string {
-  const s = raw.trim().toLowerCase();
-  if (!s) return s;
-  const hexOnly = s.replace(/-/g, '');
-  if (hexOnly.length === 32 && /^[0-9a-f]+$/.test(hexOnly)) {
-    return `${hexOnly.slice(0, 8)}-${hexOnly.slice(8, 12)}-${hexOnly.slice(12, 16)}-${hexOnly.slice(16, 20)}-${hexOnly.slice(20, 32)}`;
-  }
-  return s;
-}
-
 // ---------------------------------------------------------
 // 通用确认/提示对话框组件
 // ---------------------------------------------------------
@@ -433,6 +484,7 @@ interface PropertyEditorProps {
 const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType, onDelete }) => {
   const { register, control, setValue } = useFormContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [sectionTab, setSectionTab] = useState<'basic' | 'content' | 'points' | 'subtitles' | 'questions' | 'exercises'>('basic');
 
   // 获取所有章节用于计算索引
   const chapters = useWatch({ control, name: 'chapters' });
@@ -490,6 +542,12 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
     name: 'category',
     defaultValue: DEFAULT_COURSE_CATEGORY,
   });
+
+  useEffect(() => {
+    if (activeType !== 'section') {
+      setSectionTab('basic');
+    }
+  }, [activeType, activePath]);
 
   // 根据activeType和activePath决定使用哪个order值
   const currentOrder = activeType === 'section' && activePath ? sectionOrderValue : null;
@@ -617,7 +675,7 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               AI 人设配置
-              <span className="text-xs text-gray-500 font-normal ml-2">将按 ai_persona 对象格式保存和导入学习助手</span>
+              <span className="text-xs text-gray-500 font-normal ml-2">将按 ai_persona 对象格式保存并同步课程库</span>
             </label>
             {/* 隐藏字段：保留结构完整性，但不在前端展示 */}
             <input type="hidden" {...register('ai_persona.persona_id')} />
@@ -703,71 +761,107 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
         <div className="space-y-4">
           {/* ID字段隐藏，但保留在表单中 */}
           <input type="hidden" {...register(`${activePath}.section_id`)} />
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              节标题 {!currentTitle && <span className="text-gray-400 text-xs">(默认: {getDefaultTitle()})</span>}
-            </label>
-            <input
-              {...register(`${activePath}.title`)}
-              placeholder={getDefaultTitle()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-            {!currentTitle && (
-              <p className="text-xs text-gray-500 mt-1">当前显示名称: {getDefaultTitle()}</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">排序（自动计算）</label>
-            <input
-              type="number"
-              {...register(`${activePath}.order`, { valueAsNumber: true })}
-              value={currentOrder ?? 0}
-              readOnly
-              disabled
-              className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
-            />
-            <p className="text-xs text-gray-500 mt-1">排序序号由系统自动计算，按课程中所有节的顺序单调递增（从0开始）</p>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">预计时长（分钟）</label>
-            <input
-              type="number"
-              {...register(`${activePath}.estimated_time`, { valueAsNumber: true })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">视频URL</label>
-            <input
-              {...register(`${activePath}.video_url`)}
-              placeholder="https://..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              知识全文（Markdown）
-            </label>
-            <textarea
-              {...register(`${activePath}.knowledge_content`)}
-              rows={28}
-              placeholder="支持 Markdown，可与生成管线产出的全文总结一致..."
-              className="w-full min-h-[min(70vh,36rem)] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm resize-y"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              保存课程到工作区时，将随节数据一并写入 course.json。
-            </p>
+          <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
+            {[
+              ['basic', '基础信息'],
+              ['content', '知识正文'],
+              ['points', '知识要点'],
+              ['subtitles', '视频字幕'],
+              ['questions', '引导问题'],
+              ['exercises', '练习题'],
+            ].map(([key, label]) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setSectionTab(key as typeof sectionTab)}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${sectionTab === key
+                  ? 'bg-green-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+              >
+                {label}
+              </button>
+            ))}
           </div>
 
-          <hr className="my-6 border-gray-200" />
+          {sectionTab === 'basic' && (
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  节标题 {!currentTitle && <span className="text-gray-400 text-xs">(默认: {getDefaultTitle()})</span>}
+                </label>
+                <input
+                  {...register(`${activePath}.title`)}
+                  placeholder={getDefaultTitle()}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+                {!currentTitle && (
+                  <p className="text-xs text-gray-500 mt-1">当前显示名称: {getDefaultTitle()}</p>
+                )}
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">排序（自动计算）</label>
+                <input
+                  type="number"
+                  {...register(`${activePath}.order`, { valueAsNumber: true })}
+                  value={currentOrder ?? 0}
+                  readOnly
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-500 mt-1">排序序号由系统自动计算，按课程中所有节的顺序单调递增（从0开始）</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">预计时长（分钟）</label>
+                <input
+                  type="number"
+                  {...register(`${activePath}.estimated_time`, { valueAsNumber: true })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">视频URL</label>
+                <input
+                  {...register(`${activePath}.video_url`)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+          )}
 
-          {/* 引导问题管理 */}
-          <LeadingQuestionsManager key={`questions-${activePath}`} activePath={activePath} />
+          {sectionTab === 'content' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                知识全文（Markdown）
+              </label>
+              <textarea
+                {...register(`${activePath}.knowledge_content`)}
+                rows={28}
+                placeholder="支持 Markdown，可与生成管线产出的全文总结一致..."
+                className="w-full min-h-[min(70vh,36rem)] px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500 font-mono text-sm resize-y"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                保存课程到工作区时，将随节数据一并写入 course.json。
+              </p>
+            </div>
+          )}
 
-          <hr className="my-6 border-gray-200" />
+          {sectionTab === 'points' && (
+            <KnowledgePointsManager key={`points-${activePath}`} activePath={activePath} />
+          )}
 
-          {/* 练习题管理 */}
-          <ExercisesManager key={`exercises-${activePath}`} activePath={activePath} />
+          {sectionTab === 'subtitles' && (
+            <VideoSubtitlesManager key={`subtitles-${activePath}`} activePath={activePath} />
+          )}
+
+          {sectionTab === 'questions' && (
+            <LeadingQuestionsManager key={`questions-${activePath}`} activePath={activePath} />
+          )}
+
+          {sectionTab === 'exercises' && (
+            <ExercisesManager key={`exercises-${activePath}`} activePath={activePath} />
+          )}
         </div>
       )}
     </div>
@@ -889,6 +983,369 @@ const CourseIconUploader: React.FC = () => {
     </div>
   );
 };
+
+// ---------------------------------------------------------
+// 子组件：知识要点管理器
+// ---------------------------------------------------------
+interface KnowledgePointsManagerProps {
+  activePath: string;
+}
+
+const KnowledgePointsManager: React.FC<KnowledgePointsManagerProps> = ({ activePath }) => {
+  const { control, register } = useFormContext();
+  const { fields, append, remove, move } = useFieldArray({
+    control,
+    name: `${activePath}.knowledge_points.key_points`,
+  });
+
+  return (
+    <div className="bg-gray-50 p-4 rounded-lg">
+      <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
+        <div>
+          <h3 className="text-lg font-semibold">知识要点</h3>
+          <p className="text-xs text-gray-500">保存为 knowledge_points.key_points，上传课程库时直接进入小节数据。</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => append({ time: '', title: '', description: '' })}
+          className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+        >
+          + 添加要点
+        </button>
+      </div>
+
+      {fields.length === 0 ? (
+        <p className="text-gray-400 text-sm">暂无知识要点，点击上方按钮添加</p>
+      ) : (
+        <div className="space-y-3">
+          {fields.map((field, index) => (
+            <div key={field.id} className="bg-white p-3 rounded border border-gray-200">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-semibold text-sm">要点 {index + 1}</span>
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={() => index > 0 && move(index, index - 1)}
+                    disabled={index === 0}
+                    className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+                  >
+                    上移
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => index < fields.length - 1 && move(index, index + 1)}
+                    disabled={index === fields.length - 1}
+                    className="px-2 py-1 text-xs rounded bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-40"
+                  >
+                    下移
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => remove(index)}
+                    className="px-2 py-1 text-xs rounded text-red-600 hover:bg-red-50"
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mb-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">时间</label>
+                  <input
+                    {...register(`${activePath}.knowledge_points.key_points.${index}.time`)}
+                    placeholder="00:03"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="block text-xs text-gray-600 mb-1">标题</label>
+                  <input
+                    {...register(`${activePath}.knowledge_points.key_points.${index}.title`)}
+                    placeholder="要点标题"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-gray-600 mb-1">描述</label>
+                <textarea
+                  {...register(`${activePath}.knowledge_points.key_points.${index}.description`)}
+                  rows={3}
+                  placeholder="说明这个知识点的核心内容"
+                  className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm resize-y"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+function parseSrtToSubtitles(text: string): VideoSubtitle[] {
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+  if (!normalized) return [];
+
+  const blocks = normalized.split(/\n\s*\n/);
+  const subtitles: VideoSubtitle[] = [];
+  for (const block of blocks) {
+    const lines = block.split('\n').map((line) => line.trimEnd()).filter(Boolean);
+    if (lines.length < 2) continue;
+
+    let timeLineIndex = 0;
+    if (/^\d+$/.test(lines[0].trim())) {
+      timeLineIndex = 1;
+    }
+
+    const timeLine = lines[timeLineIndex];
+    const match = timeLine?.match(/^(.+?)\s*-->\s*(.+?)(?:\s+.*)?$/);
+    if (!match) continue;
+
+    const textLines = lines.slice(timeLineIndex + 1);
+    if (textLines.length === 0) continue;
+
+    subtitles.push({
+      seq: subtitles.length + 1,
+      start: match[1].trim(),
+      end: match[2].trim(),
+      text: textLines.join('\n'),
+    });
+  }
+  return subtitles;
+}
+
+// ---------------------------------------------------------
+// 子组件：视频字幕管理器
+// ---------------------------------------------------------
+interface VideoSubtitlesManagerProps {
+  activePath: string;
+}
+
+const SUBTITLE_PAGE_SIZE = 50;
+
+const VideoSubtitlesManager: React.FC<VideoSubtitlesManagerProps> = ({ activePath }) => {
+  const { control, register, setValue, getValues } = useFormContext();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [searchText, setSearchText] = useState('');
+  const [page, setPage] = useState(1);
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: `${activePath}.video_subtitles`,
+  });
+
+  const subtitles = (useWatch({
+    control,
+    name: `${activePath}.video_subtitles`,
+    defaultValue: [],
+  }) ?? []) as VideoSubtitle[];
+
+  const filteredIndexes = subtitles
+    .map((subtitle, index) => ({ subtitle, index }))
+    .filter(({ subtitle }) => {
+      const q = searchText.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        String(subtitle.seq ?? '').includes(q) ||
+        (subtitle.start || '').toLowerCase().includes(q) ||
+        (subtitle.end || '').toLowerCase().includes(q) ||
+        (subtitle.text || '').toLowerCase().includes(q)
+      );
+    })
+    .map(({ index }) => index);
+
+  const pageCount = Math.max(1, Math.ceil(filteredIndexes.length / SUBTITLE_PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const visibleIndexes = filteredIndexes.slice(
+    (currentPage - 1) * SUBTITLE_PAGE_SIZE,
+    currentPage * SUBTITLE_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchText, activePath]);
+
+  const renumberSubtitles = () => {
+    const current = ((getValues(`${activePath}.video_subtitles`) ?? []) as VideoSubtitle[]).map((subtitle, index) => ({
+      ...subtitle,
+      seq: index + 1,
+    }));
+    setValue(`${activePath}.video_subtitles`, current, { shouldDirty: true });
+  };
+
+  const handleRemove = (index: number) => {
+    remove(index);
+    setTimeout(renumberSubtitles, 0);
+  };
+
+  const handleAppend = () => {
+    append({ seq: fields.length + 1, start: '', end: '', text: '' });
+    setPage(pageCount);
+  };
+
+  const handleImportSrt = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const parsed = parseSrtToSubtitles(String(reader.result ?? ''));
+      setValue(`${activePath}.video_subtitles`, parsed, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      setSearchText('');
+      setPage(1);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+  };
+
+  const handleClear = () => {
+    if (window.confirm('确认清空当前小节的全部字幕记录吗？')) {
+      setValue(`${activePath}.video_subtitles`, [], { shouldDirty: true });
+      setSearchText('');
+      setPage(1);
+    }
+  };
+
+  return (
+    <div className="bg-gray-50 p-4 rounded-lg">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3 mb-3">
+        <div>
+          <h3 className="text-lg font-semibold">视频字幕</h3>
+          <p className="text-xs text-gray-500">
+            共 {subtitles.length} 条，当前筛选 {filteredIndexes.length} 条；保存为 video_subtitles。
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            value={searchText}
+            onChange={(event) => setSearchText(event.target.value)}
+            placeholder="搜索字幕内容、时间或序号"
+            className="w-64 px-3 py-1.5 border border-gray-300 rounded text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleAppend}
+            className="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm"
+          >
+            + 添加字幕
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="px-3 py-1.5 bg-slate-700 text-white rounded hover:bg-slate-800 text-sm"
+          >
+            导入 SRT
+          </button>
+          <button
+            type="button"
+            onClick={handleClear}
+            disabled={subtitles.length === 0}
+            className="px-3 py-1.5 bg-red-500 text-white rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm"
+          >
+            清空
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".srt,text/plain"
+            onChange={handleImportSrt}
+            className="hidden"
+          />
+        </div>
+      </div>
+
+      {subtitles.length === 0 ? (
+        <p className="text-gray-400 text-sm">暂无字幕记录，可手动添加或导入 SRT 文件</p>
+      ) : visibleIndexes.length === 0 ? (
+        <p className="text-gray-400 text-sm">没有匹配的字幕记录</p>
+      ) : (
+        <div className="space-y-2">
+          {visibleIndexes.map((index) => (
+            <div key={fields[index]?.id || index} className="bg-white p-3 rounded border border-gray-200">
+              <div className="grid grid-cols-1 md:grid-cols-[80px_1fr_1fr_auto] gap-2 items-end mb-2">
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">序号</label>
+                  <input
+                    type="number"
+                    {...register(`${activePath}.video_subtitles.${index}.seq`, { valueAsNumber: true })}
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">开始</label>
+                  <input
+                    {...register(`${activePath}.video_subtitles.${index}.start`)}
+                    placeholder="00:00:01,000"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">结束</label>
+                  <input
+                    {...register(`${activePath}.video_subtitles.${index}.end`)}
+                    placeholder="00:00:05,000"
+                    className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRemove(index)}
+                  className="px-2 py-1.5 text-red-600 hover:bg-red-50 rounded text-sm"
+                >
+                  删除
+                </button>
+              </div>
+              <textarea
+                {...register(`${activePath}.video_subtitles.${index}.text`)}
+                rows={2}
+                placeholder="字幕文本"
+                className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm resize-y"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filteredIndexes.length > SUBTITLE_PAGE_SIZE && (
+        <div className="flex justify-between items-center mt-4 text-sm">
+          <button
+            type="button"
+            onClick={() => setPage((value) => Math.max(1, value - 1))}
+            disabled={currentPage <= 1}
+            className="px-3 py-1.5 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40"
+          >
+            上一页
+          </button>
+          <span className="text-gray-600">
+            第 {currentPage} / {pageCount} 页
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+            disabled={currentPage >= pageCount}
+            className="px-3 py-1.5 bg-gray-100 rounded hover:bg-gray-200 disabled:opacity-40"
+          >
+            下一页
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+function getSectionKnowledgePointCount(section: Section): number {
+  const points = section.knowledge_points?.key_points;
+  return Array.isArray(points) ? points.length : 0;
+}
+
+function getSectionSubtitleCount(section: Section): number {
+  return Array.isArray(section.video_subtitles) ? section.video_subtitles.length : 0;
+}
 
 // ---------------------------------------------------------
 // 3. 子组件：引导问题管理器
@@ -1133,6 +1590,12 @@ const SectionPanel: React.FC<SectionPanelProps> = ({ sections, onInsertSection }
                       时长: {section.estimated_time}分钟
                     </div>
                   )}
+                  <div className="text-xs text-gray-500 mt-1">
+                    知识点: {getSectionKnowledgePointCount(sanitizeSection(section))} · 字幕: {getSectionSubtitleCount(sanitizeSection(section))}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    题目: {section.exercises?.length ?? 0} · 引导问题: {section.leading_questions?.length ?? 0}
+                  </div>
                 </div>
                 <button
                   onClick={() => onInsertSection(section)}
@@ -1167,6 +1630,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
       description: "",
       ai_persona: createDefaultAiPersona(""),
       category: DEFAULT_COURSE_CATEGORY,
+      contributors: "志愿者",
       icon_url: "",
       chapters: []
     };
@@ -1194,7 +1658,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
   const [openMode, setOpenMode] = useState<'workspace' | 'file' | null>(null); // 打开模式
 
   // 统一对话框状态
-  const [isSubmittingCourse, setIsSubmittingCourse] = useState(false);
+  const [isCourseLibraryOpen, setIsCourseLibraryOpen] = useState(false);
 
   const [dialog, setDialog] = useState<{
     isOpen: boolean;
@@ -1237,7 +1701,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
 
   const { control } = methods;
 
-  /** 与另存为/导入学习助手共用：保证 category 写入快照（含 normalize 默认值） */
+  /** 与另存为/课程库管理共用：保证 category 写入快照（含 normalize 默认值） */
   const getSanitizedCoursePayload = (): CourseData => {
     const raw = methods.getValues();
     return sanitizeCourseData({
@@ -1288,156 +1752,6 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
     } catch (error) {
       showDialog('保存失败', error instanceof Error ? error.message : '未知错误', 'error');
     }
-  };
-
-  /** 导入到学习助手；覆盖场景下可先 delete 再 import，新课程可跳过 delete */
-  const performSubmitCourseToLibrary = async (options?: { skipDelete?: boolean }) => {
-    const courseData = getSanitizedCoursePayload();
-    const courseId = (courseData.course_id || '').trim();
-    if (!courseId) {
-      showDialog('提示', '请先填写课程 ID', 'warning');
-      return;
-    }
-
-    const courseIdNormalized = courseIdForApi(courseId);
-
-    setIsSubmittingCourse(true);
-    try {
-      if (!options?.skipDelete) {
-        const delRes = await fetch('/api/courses/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ course_id: courseIdNormalized }),
-        });
-
-        const delRaw = await delRes.text();
-        let delJson: Record<string, unknown> = {};
-        try {
-          delJson = delRaw ? (JSON.parse(delRaw) as Record<string, unknown>) : {};
-        } catch {
-          /* 非 JSON 响应 */
-        }
-
-        const delFailed =
-          delRes.status !== 404 &&
-          (!delRes.ok || delJson.success === false);
-        if (delFailed) {
-          const msg =
-            (delJson.message as string) ||
-            (delJson.error as string) ||
-            delRaw ||
-            `HTTP ${delRes.status}`;
-          showDialog('删除课程失败', msg, 'error');
-          return;
-        }
-      }
-
-      const impRes = await fetch('/api/courses/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...courseData, course_id: courseIdNormalized }),
-      });
-
-      let impBody: Record<string, unknown> = {};
-      try {
-        impBody = (await impRes.json()) as Record<string, unknown>;
-      } catch {
-        /* ignore */
-      }
-
-      const impOk =
-        impRes.ok &&
-        (impBody.success === undefined || impBody.success === true);
-      if (!impOk) {
-        const msg =
-          (impBody.message as string) ||
-          (impBody.error as string) ||
-          `HTTP ${impRes.status}`;
-        showDialog('导入课程失败', msg, 'error');
-        return;
-      }
-
-      showDialog(
-        '导入成功',
-        ((impBody.message as string) || '已同步到学习助手') as string,
-        'success'
-      );
-    } catch (error) {
-      showDialog(
-        '导入失败',
-        error instanceof Error ? error.message : '网络或服务器错误',
-        'error'
-      );
-    } finally {
-      setIsSubmittingCourse(false);
-    }
-  };
-
-  /** 先 getById：无课程则直接导入；已有则简短确认后再删再导 */
-  const requestSubmitCourseToLibrary = () => {
-    void (async () => {
-      const courseData = methods.getValues();
-      const courseId = (courseData.course_id || '').trim();
-      if (!courseId) {
-        showDialog('提示', '请先填写课程 ID', 'warning');
-        return;
-      }
-
-      const courseIdNormalized = courseIdForApi(courseId);
-
-      try {
-        const res = await fetch('/api/courses/getById', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ course_id: courseIdNormalized }),
-        });
-
-        let body: Record<string, unknown> = {};
-        try {
-          body = (await res.json()) as Record<string, unknown>;
-        } catch {
-          /* ignore */
-        }
-
-        if (!res.ok && res.status !== 404) {
-          const msg =
-            (body.message as string) ||
-            (body.error as string) ||
-            `查询课程失败（HTTP ${res.status}）`;
-          showDialog('无法导入', msg, 'error');
-          return;
-        }
-
-        const exists =
-          res.status !== 404 &&
-          res.ok &&
-          body.success === true &&
-          body.data != null &&
-          typeof body.data === 'object';
-
-        if (!exists) {
-          void performSubmitCourseToLibrary({ skipDelete: true });
-          return;
-        }
-
-        const data = body.data as { name?: string };
-        const nameHint = data.name ? `「${data.name}」` : '';
-        showDialog(
-          '导入到学习助手',
-          `学习助手已有该课程${nameHint}，导入将覆盖原有内容。是否继续？`,
-          'confirm',
-          () => void performSubmitCourseToLibrary({ skipDelete: false }),
-          '覆盖并导入',
-          '取消'
-        );
-      } catch (error) {
-        showDialog(
-          '无法导入',
-          error instanceof Error ? error.message : '网络错误',
-          'error'
-        );
-      }
-    })();
   };
 
   // 另存为JSON文件
@@ -1783,15 +2097,11 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
                 </button>
                 <button
                   type="button"
-                  onClick={requestSubmitCourseToLibrary}
-                  disabled={isSubmittingCourse}
-                  className={`px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 ${isSubmittingCourse
-                    ? 'bg-white/10 cursor-not-allowed opacity-60'
-                    : 'bg-amber-500/90 hover:bg-amber-500'
-                    }`}
-                  title="将查询学习助手是否已有该课程；无则直接导入，有则确认后覆盖导入"
+                  onClick={() => setIsCourseLibraryOpen(true)}
+                  className="px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 bg-amber-500/90 hover:bg-amber-500"
+                  title="打开学科培训课程库管理面板"
                 >
-                  {isSubmittingCourse ? '导入中…' : '导入学习助手'}
+                  课程库管理
                 </button>
               </div>
 
@@ -1880,6 +2190,12 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
           onCancel={closeDialog}
           confirmText={dialog.confirmText}
           cancelText={dialog.cancelText}
+        />
+
+        <CourseLibraryManager
+          isOpen={isCourseLibraryOpen}
+          onClose={() => setIsCourseLibraryOpen(false)}
+          getCoursePayload={getSanitizedCoursePayload}
         />
       </div>
     </FormProvider>

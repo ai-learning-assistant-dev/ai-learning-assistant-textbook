@@ -1,0 +1,7 @@
+[install]
+registry = "https://registry.npmmirror.com"
+linker = "isolated"
+
+[install.cache]
+dir = "./.bun/install/cache"
+disable = false

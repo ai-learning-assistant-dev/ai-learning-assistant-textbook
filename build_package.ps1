@@ -20,7 +20,7 @@ if (Test-Path ".venv") {
 
 # Create venv with uv
 Write-Host "Creating/Updating venv..."
-uv venv .venv --python 3.10 --allow-existing
+uv venv .venv --python 3.12 --allow-existing
 if ($LASTEXITCODE -ne 0) {
     Write-Warning "uv venv failed. Assuming existing venv is usable."
 }
@@ -39,7 +39,7 @@ else {
     $PyVenvCfg = @(
         "home = $VenvScriptsDir",
         "include-system-site-packages = false",
-        "version = 3.10.19"
+        "version = 3.12"
     )
     $PyVenvCfg | Out-File ".venv\pyvenv.cfg" -Encoding utf8
 }

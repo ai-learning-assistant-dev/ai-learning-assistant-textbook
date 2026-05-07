@@ -67,6 +67,14 @@ desktop.ini
 #前端构建
 frontend/logs
 frontend/node_modules
+frontend/.bun
 frontend/dist
 frontend/dist-ssr
 frontend/*.local
+
+# 启动器动态构建缓存
+.uv-cache/
+.uv-python/
+
+# 参考仓库
+temp/

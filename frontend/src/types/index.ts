@@ -23,6 +23,7 @@ export interface AppConfig {
   max_concurrent_tasks?: number;
   last_selected_model?: string;
   last_workspace_name?: string;
+  courses_api_base?: string;
 }
 
 export interface ConfigResponse extends ApiResponse {
@@ -131,6 +132,23 @@ export interface LeadingQuestion {
   question: string;
 }
 
+export interface KnowledgePoint {
+  title?: string;
+  description: string;
+  time: string;
+}
+
+export interface KnowledgePoints {
+  key_points: KnowledgePoint[];
+}
+
+export interface VideoSubtitle {
+  seq: number;
+  start: string;
+  end: string;
+  text: string;
+}
+
 export interface Section {
   section_id: string;
   title: string;
@@ -139,6 +157,8 @@ export interface Section {
   video_url: string;
   /** 完整知识内容（通常为 Markdown），与生成管线中的全文总结一致 */
   knowledge_content?: string;
+  knowledge_points?: KnowledgePoints;
+  video_subtitles?: VideoSubtitle[];
   leading_questions: LeadingQuestion[];
   exercises: Exercise[];
 }
@@ -175,12 +195,13 @@ export interface CourseData {
   course_id: string;
   title: string;
   description: string;
-  /** 课程 AI 人设，导入学习助手时按对象结构提交 */
+  /** 课程 AI 人设，同步课程库时按对象结构提交 */
   ai_persona: AiPersona;
   /** 兼容历史字段（旧版仅有字符串人设） */
   teacher_persona?: string;
   /** 课程分类，默认「职业技能」 */
   category: CourseCategory;
+  contributors?: string;
   icon_url?: string;  // 课程图标，支持base64或URL
   chapters: Chapter[];
 }
