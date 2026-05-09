@@ -14,6 +14,10 @@ import {
   KnowledgePoints,
   LeadingQuestion,
   VideoSubtitle,
+  AppConfig,
+  CreateTaskRequest,
+  GenerateOptions,
+  Task,
 } from '../types';
 import CourseLibraryManager from './CourseLibraryManager';
 
@@ -270,6 +274,19 @@ interface SidebarTreeProps {
   onMoveSection: (sourceChapterIndex: number, sourceSectionIndex: number, targetChapterIndex: number, targetSectionIndex: number) => void;
 }
 
+const isSectionIncomplete = (sec: Section) => {
+  return !sec.video_subtitles?.length ||
+         !sec.knowledge_points?.key_points?.length ||
+         !sec.knowledge_content ||
+         !sec.exercises?.length ||
+         !sec.leading_questions?.length;
+};
+
+const isChapterIncomplete = (chapter: Chapter) => {
+  if (!chapter.sections || chapter.sections.length === 0) return false;
+  return chapter.sections.some(isSectionIncomplete);
+};
+
 const SidebarTree: React.FC<SidebarTreeProps> = ({ control, onSelect, activePath, onAddSection, onAddChapter, onMoveSection }) => {
   const chapters = useWatch({ control, name: "chapters" });
   const title = useWatch({ control, name: "title" });
@@ -347,12 +364,17 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ control, onSelect, activePath
           <div className="flex items-center gap-2">
             <div
               onClick={() => onSelect(`chapters.${cIdx}`, 'chapter')}
-              className={`flex-1 p-2 cursor-pointer rounded mb-1 ${activePath === `chapters.${cIdx}`
+              className={`flex-1 p-2 cursor-pointer rounded mb-1 flex items-center justify-between ${activePath === `chapters.${cIdx}`
                 ? 'bg-indigo-500 text-white'
                 : 'bg-indigo-100 hover:bg-indigo-200'
                 }`}
             >
-              📂 <strong>{chapter.title || `第${cIdx + 1}章`}</strong>
+              <span>📂 <strong>{chapter.title || `第${cIdx + 1}章`}</strong></span>
+              {isChapterIncomplete(chapter) && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${activePath === `chapters.${cIdx}` ? 'bg-white/20 border-white/40 text-white' : 'bg-red-100 text-red-600 border-red-200'}`} title="该章存在缺失内容的小节">
+                  ⚠️ 需补全
+                </span>
+              )}
             </div>
             <button
               onClick={(e) => {
@@ -453,7 +475,14 @@ const SidebarTree: React.FC<SidebarTreeProps> = ({ control, onSelect, activePath
                     }}
                     onClick={() => onSelect(`chapters.${cIdx}.sections.${sIdx}`, 'section')}
                   >
-                    🎥 {section.title || `第${globalSectionIndex + 1}节`}
+                    <div className="flex items-center justify-between">
+                      <span className="truncate flex-1" title={section.title || `第${globalSectionIndex + 1}节`}>
+                        🎥 {section.title || `第${globalSectionIndex + 1}节`}
+                      </span>
+                      {isSectionIncomplete(section) && (
+                        <span className="ml-1 text-[10px]" title="存在缺失内容">⚠️</span>
+                      )}
+                    </div>
                   </div>
                 </React.Fragment>
               );
@@ -479,9 +508,10 @@ interface PropertyEditorProps {
   activePath: string | null;
   activeType: 'course' | 'chapter' | 'section' | null;
   onDelete?: (path: string, type: 'chapter' | 'section') => void;
+  onAutoComplete?: (path: string) => void;
 }
 
-const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType, onDelete }) => {
+const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType, onDelete, onAutoComplete }) => {
   const { register, control, setValue } = useFormContext();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [sectionTab, setSectionTab] = useState<'basic' | 'content' | 'points' | 'subtitles' | 'questions' | 'exercises'>('basic');
@@ -612,15 +642,25 @@ const PropertyEditor: React.FC<PropertyEditorProps> = ({ activePath, activeType,
           </span>
           <span className="ml-3 text-gray-500 text-sm">路径: {activePath}</span>
         </div>
-        {/* 删除按钮（只在章或节时显示） */}
-        {(activeType === 'chapter' || activeType === 'section') && (
-          <button
-            onClick={handleDeleteClick}
-            className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
-          >
-            删除
-          </button>
-        )}
+        <div className="flex gap-2">
+          {(activeType === 'section' || activeType === 'chapter') && onAutoComplete && (
+            <button
+              onClick={() => onAutoComplete(activePath!)}
+              className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors shadow-sm"
+              title={`自动补全此${activeType === 'chapter' ? '章的所有节' : '节'}的缺失数据`}
+            >
+              ✨ 自动补全
+            </button>
+          )}
+          {(activeType === 'chapter' || activeType === 'section') && (
+            <button
+              onClick={handleDeleteClick}
+              className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600 transition-colors shadow-sm"
+            >
+              删除
+            </button>
+          )}
+        </div>
       </div>
 
       {/* 删除确认对话框 */}
@@ -1618,10 +1658,24 @@ const SectionPanel: React.FC<SectionPanelProps> = ({ sections, onInsertSection }
 interface CourseEditorProps {
   initialData?: CourseData;
   onSave?: (data: CourseData) => void;
-  workspaces?: Array<{ name: string; path: string }>;
+  workspaces?: Array<{ name: string; path: string; created_at?: string }>;
+  models?: Model[];
+  appConfig?: AppConfig;
+  onConfigChange?: (updates: Partial<AppConfig>) => void;
+  onTaskSubmit?: (request: CreateTaskRequest) => Promise<void>;
+  tasks?: Task[];
 }
 
-const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSave, workspaces = [] }) => {
+const CourseEditor: React.FC<CourseEditorProps> = ({ 
+  initialData, 
+  onSave: _onSave, 
+  workspaces = [],
+  models = [],
+  appConfig,
+  onConfigChange,
+  onTaskSubmit,
+  tasks = []
+}) => {
   const defaultValues: CourseData = initialData
     ? sanitizeCourseData(initialData)
     : {
@@ -1647,6 +1701,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
     }
   }, [initialData, methods]);
 
+
   const [activeNode, setActiveNode] = useState<{ path: string | null; type: 'course' | 'chapter' | 'section' | null }>({
     path: null,
     type: null
@@ -1656,6 +1711,12 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
   const [availableSections, setAvailableSections] = useState<Section[]>([]);
   const [openMode, setOpenMode] = useState<'workspace' | 'file' | null>(null); // 打开模式
+
+  const [autoCompleteConfig, setAutoCompleteConfig] = useState<{
+    isOpen: boolean;
+    type: 'section' | 'chapter' | 'course';
+    targetPath?: string;
+  }>({ isOpen: false, type: 'course' });
 
   // 统一对话框状态
   const [isCourseLibraryOpen, setIsCourseLibraryOpen] = useState(false);
@@ -1674,6 +1735,89 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
     message: '',
     type: 'info'
   });
+
+  // ---------- 自动同步已完成的补全任务数据 ----------
+  const prevTasksRef_sync = useRef<Task[]>([]);
+
+  useEffect(() => {
+    if (!tasks || tasks.length === 0 || openMode !== 'workspace' || !selectedWorkspace) {
+      prevTasksRef_sync.current = tasks || [];
+      return;
+    }
+
+    const newlyCompletedTasks = tasks.filter(task => {
+      const prevTask = prevTasksRef_sync.current.find(t => t.id === task.id);
+      return task.status === 'completed' && (!prevTask || prevTask.status !== 'completed');
+    });
+
+    prevTasksRef_sync.current = tasks;
+
+    if (newlyCompletedTasks.length > 0) {
+      fetch(`/api/course/${selectedWorkspace}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.sections) {
+            setAvailableSections(data.sections);
+
+            const completedUrls = newlyCompletedTasks.map(t => t.url);
+            const currentChapters = methods.getValues('chapters') || [];
+            let chaptersChanged = false;
+
+            const updatedChapters = currentChapters.map((chapter: Chapter) => {
+              if (!chapter.sections) return chapter;
+              const updatedSections = chapter.sections.map((sec: Section) => {
+                if (sec.video_url && completedUrls.includes(sec.video_url)) {
+                  const diskSection = data.sections.find((s: Section) => s.video_url === sec.video_url);
+                  if (diskSection) {
+                    let changed = false;
+                    const newSec = { ...sec };
+
+                    if (!newSec.video_subtitles?.length && diskSection.video_subtitles?.length) {
+                      newSec.video_subtitles = diskSection.video_subtitles;
+                      changed = true;
+                    }
+                    if (!newSec.knowledge_points?.key_points?.length && diskSection.knowledge_points?.key_points?.length) {
+                      newSec.knowledge_points = diskSection.knowledge_points;
+                      changed = true;
+                    }
+                    if (!newSec.knowledge_content && diskSection.knowledge_content) {
+                      newSec.knowledge_content = diskSection.knowledge_content;
+                      changed = true;
+                    }
+                    if (!newSec.exercises?.length && diskSection.exercises?.length) {
+                      newSec.exercises = diskSection.exercises;
+                      changed = true;
+                    }
+                    if (!newSec.leading_questions?.length && diskSection.leading_questions?.length) {
+                      newSec.leading_questions = diskSection.leading_questions;
+                      changed = true;
+                    }
+
+                    if (changed) {
+                      chaptersChanged = true;
+                      return newSec;
+                    }
+                  }
+                }
+                return sec;
+              });
+              return { ...chapter, sections: updatedSections };
+            });
+
+            if (chaptersChanged) {
+              methods.setValue('chapters', updatedChapters, { shouldDirty: true });
+              // 自动保存到工作区
+              setTimeout(() => {
+                saveCourseToWorkspace(true);
+              }, 500);
+            }
+          }
+        })
+        .catch(err => console.error('Failed to sync completed tasks to course editor:', err));
+    }
+  }, [tasks, openMode, selectedWorkspace, methods]);
+  // ------------------------------------------------
+
 
   // 显示对话框的辅助函数
   const showDialog = (
@@ -1729,7 +1873,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
   };
 
   // 保存课程到工作区
-  const saveCourseToWorkspace = async () => {
+  const saveCourseToWorkspace = async (silent = false) => {
     if (!selectedWorkspace) {
       showDialog('提示', '请选择工作区', 'warning');
       return;
@@ -1745,7 +1889,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
 
       const data = await response.json();
       if (data.success) {
-        showDialog('保存成功', '课程已成功保存到工作区', 'success');
+        if (!silent) showDialog('保存成功', '课程已成功保存到工作区', 'success');
       } else {
         showDialog('保存失败', data.error || '未知错误', 'error');
       }
@@ -1784,10 +1928,24 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
           const jsonStr = event.target?.result as string;
           const data = JSON.parse(jsonStr) as CourseData;
           methods.reset(sanitizeCourseData(data));
-          setAvailableSections([]); // 清空可用sections
-          setSelectedWorkspace(''); // 清空工作区选择
-          setOpenMode('file');
-          showDialog('加载成功', 'JSON文件已成功加载', 'success');
+          // 自动关联匹配的工作区
+          const matchedWorkspace = workspaces.find(ws => ws.name === data.title);
+          if (matchedWorkspace) {
+            setSelectedWorkspace(matchedWorkspace.name);
+            setOpenMode('workspace');
+            // 加载 available sections
+            fetch(`/api/course/${matchedWorkspace.name}`).then(res => res.json()).then(wsData => {
+                if (wsData.success) {
+                    setAvailableSections(wsData.sections);
+                }
+            });
+            showDialog('加载成功', `JSON文件已加载，并自动关联到同名工作区: ${matchedWorkspace.name}，可直接使用补全功能。`, 'success');
+          } else {
+            setAvailableSections([]); // 清空可用sections
+            setSelectedWorkspace(''); // 清空工作区选择
+            setOpenMode('file');
+            showDialog('加载成功', 'JSON文件已加载（未找到同名工作区）。在执行自动补全时将自动保存到目标工作区。', 'success');
+          }
         } catch (error) {
           showDialog('格式错误', error instanceof Error ? error.message : 'JSON文件格式错误', 'error');
         }
@@ -1795,6 +1953,106 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
       reader.readAsText(file);
     };
     input.click();
+  };
+
+  const handleAutoCompleteConfirm = async (config: { workspaceName: string; modelName: string; maxConcurrent: number }) => {
+    if (!onTaskSubmit || !onConfigChange) {
+       showDialog('错误', '任务提交流程未就绪', 'error');
+       return;
+    }
+    
+    // update global config
+    onConfigChange({
+      max_concurrent_tasks: config.maxConcurrent,
+      last_workspace_name: config.workspaceName,
+      last_selected_model: config.modelName
+    });
+
+    if (openMode !== 'workspace') {
+      const courseData = getSanitizedCoursePayload();
+      try {
+        await fetch(`/api/course/${config.workspaceName}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ course: courseData }),
+        });
+        setSelectedWorkspace(config.workspaceName);
+        setOpenMode('workspace');
+      } catch (err) {
+        showDialog('保存失败', '自动保存到工作区失败，无法继续补全。', 'error');
+        return;
+      }
+    }
+
+    const sectionsToProcess: Section[] = [];
+    if (autoCompleteConfig.type === 'section') {
+      const section = methods.getValues(autoCompleteConfig.targetPath as any) as Section;
+      if (section) sectionsToProcess.push(section);
+    } else if (autoCompleteConfig.type === 'chapter') {
+      const chapter = methods.getValues(autoCompleteConfig.targetPath as any) as Chapter;
+      if (chapter && chapter.sections) {
+        sectionsToProcess.push(...chapter.sections);
+      }
+    } else {
+      const chapters = methods.getValues('chapters') || [];
+      chapters.forEach((c: Chapter) => {
+        if (c.sections) {
+          sectionsToProcess.push(...c.sections);
+        }
+      });
+    }
+
+    if (sectionsToProcess.length === 0) {
+      showDialog('提示', '未找到可补全的节。', 'info');
+      setAutoCompleteConfig({ ...autoCompleteConfig, isOpen: false });
+      return;
+    }
+
+    const groups = new Map<string, string[]>(); // JSON.stringify(options) -> urls
+    let totalUrls = 0;
+
+    sectionsToProcess.forEach(sec => {
+      if (!sec.video_url) return;
+      const opts: GenerateOptions = {
+        summary: !sec.knowledge_points?.key_points?.length,
+        full_content: !sec.knowledge_content,
+        exercises: !sec.exercises?.length,
+        questions: !sec.leading_questions?.length,
+      };
+      
+      const missingSubtitles = !sec.video_subtitles?.length;
+      
+      if (!opts.summary && !opts.full_content && !opts.exercises && !opts.questions && !missingSubtitles) return;
+      
+      const key = JSON.stringify(opts);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(sec.video_url);
+      totalUrls++;
+    });
+
+    if (totalUrls === 0) {
+      showDialog('提示', '所选内容无需补全，或未配置视频链接(video_url)。', 'info');
+      setAutoCompleteConfig({ ...autoCompleteConfig, isOpen: false });
+      return;
+    }
+
+    setAutoCompleteConfig({ ...autoCompleteConfig, isOpen: false });
+    
+    try {
+      for (const [key, urls] of groups.entries()) {
+        const opts = JSON.parse(key) as GenerateOptions;
+        await onTaskSubmit({
+          urls,
+          workspace_name: config.workspaceName,
+          model_name: config.modelName,
+          download_all_parts: false,
+          generate_options: opts
+        });
+      }
+      showDialog('补全任务已提交', `已为您生成 ${groups.size} 批相关任务（共 ${totalUrls} 个视频）。请前往"视频下载"标签页查看进度。完成后您可以在对应工作区重新加载以查看最新数据。`, 'success');
+    } catch (e) {
+      showDialog('提交失败', e instanceof Error ? e.message : '未知错误', 'error');
+    }
   };
 
   // 插入section到最后一章
@@ -2071,14 +2329,34 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
               {/* 操作按钮组 */}
               <div className="flex gap-2">
                 <button
-                  onClick={openJSONFile}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setAutoCompleteConfig({ isOpen: true, type: 'course' });
+                  }}
+                  className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-sm font-medium transition-colors border border-blue-400 shadow-sm"
+                  title="一键补全全课缺失数据"
+                >
+                  ✨ 一键补全
+                </button>
+                <div className="w-px h-6 bg-white/30 self-center mx-1"></div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    openJSONFile();
+                  }}
                   className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded text-sm font-medium transition-colors border border-white/30"
                   title="从本地文件打开JSON"
                 >
                   📂 选中JSON
                 </button>
                 <button
-                  onClick={saveCourseToWorkspace}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    saveCourseToWorkspace();
+                  }}
                   disabled={openMode !== 'workspace'}
                   className={`px-3 py-1.5 text-white rounded text-sm font-medium transition-colors ${openMode !== 'workspace'
                     ? 'bg-white/10 cursor-not-allowed opacity-50'
@@ -2089,7 +2367,11 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
                   💾 保存
                 </button>
                 <button
-                  onClick={exportCourseJSON}
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    exportCourseJSON();
+                  }}
                   className="px-3 py-1.5 bg-white/20 hover:bg-white/30 text-white rounded text-sm font-medium transition-colors border border-white/30"
                   title="导出JSON文件"
                 >
@@ -2097,7 +2379,10 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsCourseLibraryOpen(true)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setIsCourseLibraryOpen(true);
+                  }}
                   className="px-3 py-1.5 text-white rounded text-sm font-medium transition-colors border border-white/30 bg-amber-500/90 hover:bg-amber-500"
                   title="打开学科培训课程库管理面板"
                 >
@@ -2167,6 +2452,11 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
             activePath={activeNode.path}
             activeType={activeNode.type}
             onDelete={handleDelete}
+            onAutoComplete={(path) => setAutoCompleteConfig({ 
+              isOpen: true, 
+              type: activeNode.type === 'chapter' ? 'chapter' : 'section', 
+              targetPath: path 
+            })}
           />
 
           {/* 右侧：Section展示面板 */}
@@ -2197,6 +2487,197 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ initialData, onSave: _onSav
           onClose={() => setIsCourseLibraryOpen(false)}
           getCoursePayload={getSanitizedCoursePayload}
         />
+
+        {/* 计算补全统计数据 */}
+        {(() => {
+          const missingStats = {
+            sectionsWithMissing: 0,
+            missingSummary: 0,
+            missingContent: 0,
+            missingExercises: 0,
+            missingQuestions: 0,
+            missingVideoUrl: 0,
+            missingSubtitles: 0,
+            details: [] as Array<{title: string, missing: string[], noUrl: boolean}>
+          };
+
+          if (autoCompleteConfig.isOpen) {
+            const sectionsToProcess: Section[] = [];
+            if (autoCompleteConfig.type === 'section') {
+              const section = methods.getValues(autoCompleteConfig.targetPath as any) as Section;
+              if (section) sectionsToProcess.push(section);
+            } else if (autoCompleteConfig.type === 'chapter') {
+              const chapter = methods.getValues(autoCompleteConfig.targetPath as any) as Chapter;
+              if (chapter && chapter.sections) {
+                sectionsToProcess.push(...chapter.sections);
+              }
+            } else {
+              const chapters = methods.getValues('chapters') || [];
+              chapters.forEach((c: Chapter) => {
+                if (c.sections) {
+                  sectionsToProcess.push(...c.sections);
+                }
+              });
+            }
+
+            sectionsToProcess.forEach(sec => {
+              const missing = [];
+              let noUrl = false;
+              if (!sec.video_url) {
+                noUrl = true;
+                missingStats.missingVideoUrl++;
+              } else {
+                if (!sec.video_subtitles?.length) { missing.push('字幕'); missingStats.missingSubtitles++; }
+                if (!sec.knowledge_points?.key_points?.length) { missing.push('知识点'); missingStats.missingSummary++; }
+                if (!sec.knowledge_content) { missing.push('完整文档'); missingStats.missingContent++; }
+                if (!sec.exercises?.length) { missing.push('练习题'); missingStats.missingExercises++; }
+                if (!sec.leading_questions?.length) { missing.push('引导问题'); missingStats.missingQuestions++; }
+              }
+
+              if (missing.length > 0 || noUrl) {
+                missingStats.sectionsWithMissing++;
+                missingStats.details.push({
+                  title: sec.title || '未命名小节',
+                  missing,
+                  noUrl
+                });
+              }
+            });
+          }
+
+          return (
+            <React.Fragment>
+              {autoCompleteConfig.isOpen && (
+                <div className="fixed inset-0 flex items-center justify-center z-[60] bg-black/40 backdrop-blur-sm">
+                  <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl border border-gray-100 animate-scale-in max-h-[90vh] overflow-y-auto">
+                    <div className="flex items-center gap-3 mb-4">
+                      <span className="text-2xl">✨</span>
+                      <h3 className="text-xl font-bold text-gray-800">自动补全配置</h3>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                      {autoCompleteConfig.type === 'course' 
+                        ? '系统将检查全课所有视频，自动过滤已有内容，仅对缺失的字幕、知识点、练习题等向 AI 发起生成任务。' 
+                        : autoCompleteConfig.type === 'chapter'
+                          ? '系统将检查当前章的所有视频，自动对缺失的内容向 AI 发起生成任务。'
+                          : '系统将检查当前节，自动对缺失的内容向 AI 发起生成任务。'}
+                    </p>
+
+                    {/* 统计信息显示 */}
+                    {missingStats.sectionsWithMissing > 0 ? (
+                      <div className="mb-5 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+                        <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 font-semibold flex justify-between items-center">
+                          <span>待补全情况统计</span>
+                          <span className="text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full text-xs">共 {missingStats.sectionsWithMissing} 节需处理</span>
+                        </div>
+                        <div className="p-3 max-h-40 overflow-y-auto space-y-2">
+                          {missingStats.details.map((detail, i) => (
+                            <div key={i} className="flex flex-col border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                               <span className="font-medium text-gray-800">{detail.title}</span>
+                               {detail.noUrl ? (
+                                 <span className="text-red-500 text-xs mt-1">⚠️ 缺失视频链接(video_url)，无法补全</span>
+                               ) : (
+                                 <span className="text-gray-500 text-xs mt-1">将补全: <span className="text-blue-600">{detail.missing.join('、')}</span></span>
+                               )}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="bg-blue-50/50 px-3 py-2 border-t border-gray-200 text-xs text-blue-800 flex flex-wrap gap-x-3 gap-y-1">
+                          <span className="font-medium">总计生成:</span>
+                          {missingStats.missingSubtitles > 0 && <span>字幕 x{missingStats.missingSubtitles}</span>}
+                          {missingStats.missingSummary > 0 && <span>知识点 x{missingStats.missingSummary}</span>}
+                          {missingStats.missingContent > 0 && <span>文档 x{missingStats.missingContent}</span>}
+                          {missingStats.missingExercises > 0 && <span>练习题 x{missingStats.missingExercises}</span>}
+                          {missingStats.missingQuestions > 0 && <span>预设问题 x{missingStats.missingQuestions}</span>}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mb-5 p-3 bg-green-50 text-green-700 border border-green-200 rounded-lg text-sm flex items-center gap-2">
+                        <span>✅</span> 所选内容非常完整，无需进行任何补全！
+                      </div>
+                    )}
+                    
+                    <div className="space-y-4">
+                      <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">目标工作区 <span className="text-red-500">*</span></label>
+                  <select
+                    id="ac-workspace"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-white"
+                    defaultValue={selectedWorkspace || appConfig?.last_workspace_name || ''}
+                  >
+                    <option value="" disabled>请选择存放生成结果的工作区...</option>
+                    {workspaces.map(ws => (
+                      <option key={ws.name} value={ws.name}>{ws.name}</option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1.5 ml-1">生成的数据将保存在此工作区中。</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">AI 模型 <span className="text-red-500">*</span></label>
+                  <select
+                    id="ac-model"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow bg-white"
+                    defaultValue={appConfig?.last_selected_model || ''}
+                  >
+                    <option value="" disabled>请选择用于总结的AI模型...</option>
+                    {models.map(m => (
+                      <option key={m.model_name} value={m.model_name}>{m.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">并发处理数</label>
+                  <input
+                    id="ac-concurrent"
+                    type="number"
+                    min="1"
+                    max="5"
+                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-shadow"
+                    defaultValue={appConfig?.max_concurrent_tasks || 2}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
+                <button
+                  onClick={() => setAutoCompleteConfig({ ...autoCompleteConfig, isOpen: false })}
+                  className="px-5 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => {
+                    const wsSelect = document.getElementById('ac-workspace') as HTMLSelectElement;
+                    const modSelect = document.getElementById('ac-model') as HTMLSelectElement;
+                    const concInput = document.getElementById('ac-concurrent') as HTMLInputElement;
+                    
+                    if (!wsSelect.value) {
+                      showDialog('提示', '请选择目标工作区', 'warning');
+                      return;
+                    }
+                    if (!modSelect.value) {
+                      showDialog('提示', '请选择AI模型', 'warning');
+                      return;
+                    }
+                    
+                    handleAutoCompleteConfirm({
+                      workspaceName: wsSelect.value,
+                      modelName: modSelect.value,
+                      maxConcurrent: parseInt(concInput.value, 10) || 2
+                    });
+                  }}
+                  className="px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm hover:shadow"
+                >
+                  开始补全
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+        </React.Fragment>
+        );
+      })()}
       </div>
     </FormProvider>
   );

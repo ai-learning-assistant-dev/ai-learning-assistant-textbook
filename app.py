@@ -437,6 +437,37 @@ def task_queue_worker():
             task_queue.task_done()
 
 
+def is_valid_summary(filepath):
+    if not os.path.exists(filepath): return False
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return len(data.get('key_points', [])) > 0
+    except:
+        return False
+
+def is_valid_content(filepath):
+    if not os.path.exists(filepath): return False
+    return os.path.getsize(filepath) > 100
+
+def is_valid_exercises(filepath):
+    if not os.path.exists(filepath): return False
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return len(data.get('multiple_choice', [])) > 0 or len(data.get('short_answer', [])) > 0
+    except:
+        return False
+
+def is_valid_questions(filepath):
+    if not os.path.exists(filepath): return False
+    try:
+        with open(filepath, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return len(data) > 0
+    except:
+        return False
+
 def process_video_task(task_id, thread_name, url, output_dir, model_name, cookies_file, custom_folder_name=None, download_all_parts=False, generate_options=None, ffmpeg_path=None):
     """处理单个视频的下载和总结任务"""
     if generate_options is None:
@@ -555,7 +586,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             
             # ========== 1. 生成要点总结 ==========
             if generate_options.get('summary', True):
-                if os.path.exists(summary_json_file):
+                if is_valid_summary(summary_json_file):
                     with tasks_lock:
                         tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (1/4): 要点总结已存在，跳过'
                 else:
@@ -586,7 +617,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             
             # ========== 2. 生成完整内容文档 ==========
             if generate_options.get('full_content', True):
-                if os.path.exists(full_content_file):
+                if is_valid_content(full_content_file):
                     with tasks_lock:
                         tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (2/4): 完整文档已存在，跳过'
                 else:
@@ -621,7 +652,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             
             # ========== 3. 生成练习题 ==========
             if generate_options.get('exercises', True):
-                if os.path.exists(exercises_file):
+                if is_valid_exercises(exercises_file):
                     with tasks_lock:
                         tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (3/4): 练习题已存在，跳过'
                 else:
@@ -653,7 +684,7 @@ def process_video_task(task_id, thread_name, url, output_dir, model_name, cookie
             
             # ========== 4. 生成预设问题 ==========
             if generate_options.get('questions', True):
-                if os.path.exists(questions_file):
+                if is_valid_questions(questions_file):
                     with tasks_lock:
                         tasks[task_id]['message'] = f'处理字幕 {file_index}/{total_files}: {subtitle_title} (4/4): 预设问题已存在，跳过'
                 else:

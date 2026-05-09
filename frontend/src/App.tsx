@@ -503,7 +503,16 @@ function App() {
 
       {activeTab === 'course' && (
         <div className="h-[calc(100vh-60px)]">
-          <CourseEditor initialData={courseData || undefined} onSave={handleCourseSave} workspaces={workspaces} />
+          <CourseEditor 
+            initialData={courseData || undefined} 
+            onSave={handleCourseSave} 
+            workspaces={workspaces}
+            models={models}
+            appConfig={appConfig}
+            onConfigChange={saveAppConfig}
+            onTaskSubmit={handleTaskSubmit}
+            tasks={Object.values(tasks)}
+          />
         </div>
       )}
     </div>

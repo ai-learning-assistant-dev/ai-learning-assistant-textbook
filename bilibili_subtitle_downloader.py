@@ -977,8 +977,8 @@ class BilibiliSubtitleDownloader:
                 local_subtitle_found = False
                 for filename in check_filenames:
                     local_path = os.path.join(video_dir, filename)
-                    if os.path.exists(local_path):
-                        print(f"✅ 发现本地已存在字幕文件: {filename}")
+                    if os.path.exists(local_path) and os.path.getsize(local_path) > 0:
+                        print(f"✅ 发现本地已存在有效字幕文件: {filename}")
                         print("将在后续步骤中使用此本地文件。")
                         result['subtitles'].append(local_path)
                         local_subtitle_found = True
