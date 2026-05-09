@@ -1583,6 +1583,15 @@ def leading_questions_search_by_section_proxy():
 def ai_personas_get_by_id_proxy():
     return _proxy_post_to_courses_api('/api/ai-personas/getById')
 
+@app.route('/shutdown', methods=['GET'])
+def shutdown():
+    # 可以在这里执行一些清理工作
+    print("收到关闭请求，服务正在关闭...")
+    
+    # 强制退出进程
+    os._exit(0)
+    
+    return "Server shutting down..."
 
 if __name__ == '__main__':
     # 确保必要的目录存在
