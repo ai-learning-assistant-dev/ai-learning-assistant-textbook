@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "faster-whisper>=0.10.0",
     "flask>=2.3.0",
+    "intel-openmp",
     "modelscope>=1.11.0",
     "openpyxl>=3.1.5",
     "psycopg2-binary>=2.9.11",
@@ -18,9 +19,9 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = [
-    "torch==2.4.0",
-    "torchvision==0.19.0",      # 建议加上，如果用到
-    "torchaudio==2.4.0",        # 建议加上，如果用到
+    "torch==2.4.1",
+    "torchvision==0.19.1",      # 建议加上，如果用到
+    "torchaudio==2.4.1",        # 建议加上，如果用到
     "ctranslate2>=4.6.2",
     "onnxruntime-gpu",
 ]
