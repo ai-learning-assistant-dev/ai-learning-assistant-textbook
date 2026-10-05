@@ -7,3 +7,7 @@ faster-whisper>=0.10.0
 modelscope>=1.11.0
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.0
+# 打包卡片为Anki的 .apkg 格式
+genanki>=0.13.0
+# 解析 OneNote .one
+aspose-note-foss==26.9.0

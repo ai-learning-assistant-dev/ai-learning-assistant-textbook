@@ -26,6 +26,10 @@ from subtitle_summarizer import SRTParser, SubtitleSummarizer, load_llm_config
 from llm_client import OpenAICompatClient
 from define import create_empty_course
 
+# 业务服务：首页各功能栏（笔记制卡等）的服务在 services/ 下独立演进，
+# 通过 Blueprint 挂载，不侵入本文件的视频下载主线。
+from services import register_all
+
 # course.json 中 category 允许的取值（与前端一致）；缺失或非法时保存前补为默认值
 _COURSE_CATEGORIES_ALLOWED = frozenset({'职业技能', '文化基础', '工具使用', '人文素养'})
 _DEFAULT_COURSE_CATEGORY = '职业技能'
@@ -40,6 +44,9 @@ else:
     app = Flask(__name__, static_folder='templates', static_url_path='')
 
 app.config['JSON_AS_ASCII'] = False  # 支持中文JSON
+
+# 注册各业务服务的 Blueprint（如 /api/notecard/*）
+register_all(app)
 
 # 全局变量存储任务状态
 tasks = {}

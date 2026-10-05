@@ -76,5 +76,10 @@ frontend/*.local
 .uv-cache/
 .uv-python/
 
-# 参考仓库
-temp/
+templates
+
+# 制卡导出的 .apkg 产物（services/notecard/note2anki/server.py 的 OUT_DIR）
+out/
+
+# AI Tools cache
+.workbuddy

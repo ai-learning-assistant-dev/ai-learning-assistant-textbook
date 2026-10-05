@@ -12,9 +12,13 @@ name = "ai-learning-assistant-textbook"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "aspose-note-foss" },
     { name = "faster-whisper" },
     { name = "flask" },
+    { name = "genanki" },
+    { name = "intel-openmp" },
     { name = "modelscope" },
+    { name = "numpy" },
     { name = "openpyxl" },
     { name = "psycopg2-binary" },
     { name = "pyinstaller" },
@@ -27,31 +31,35 @@ dependencies = [
 gpu = [
     { name = "ctranslate2" },
     { name = "onnxruntime-gpu" },
-    { name = "torch", version = "2.4.0", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
-    { name = "torch", version = "2.4.0", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torch", version = "2.4.0+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.4.1+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
     { name = "torchaudio" },
-    { name = "torchvision", version = "0.19.0", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torchvision", version = "0.19.0+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+    { name = "torchvision", version = "0.19.1", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torchvision", version = "0.19.1+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aspose-note-foss", specifier = "==26.9.0" },
     { name = "ctranslate2", marker = "extra == 'gpu'", specifier = ">=4.6.2" },
     { name = "faster-whisper", specifier = ">=0.10.0" },
     { name = "flask", specifier = ">=2.3.0" },
+    { name = "genanki", specifier = ">=0.13.0" },
+    { name = "intel-openmp" },
     { name = "modelscope", specifier = ">=1.11.0" },
+    { name = "numpy", specifier = ">=2.0" },
     { name = "onnxruntime-gpu", marker = "extra == 'gpu'" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "psycopg2-binary", specifier = ">=2.9.11" },
     { name = "pyinstaller", specifier = ">=5.13.0" },
     { name = "requests", specifier = ">=2.31.0" },
     { name = "sqlalchemy", specifier = ">=2.0.45" },
-    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'gpu') or (sys_platform == 'win32' and extra == 'gpu')", specifier = "==2.4.0", index = "https://download.pytorch.org/whl/cu124" },
-    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'gpu'", specifier = "==2.4.0" },
-    { name = "torchaudio", marker = "extra == 'gpu'", specifier = "==2.4.0" },
-    { name = "torchvision", marker = "(sys_platform == 'linux' and extra == 'gpu') or (sys_platform == 'win32' and extra == 'gpu')", specifier = "==0.19.0", index = "https://download.pytorch.org/whl/cu124" },
-    { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'gpu'", specifier = "==0.19.0" },
+    { name = "torch", marker = "(sys_platform == 'linux' and extra == 'gpu') or (sys_platform == 'win32' and extra == 'gpu')", specifier = "==2.4.1", index = "https://download.pytorch.org/whl/cu124" },
+    { name = "torch", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'gpu'", specifier = "==2.4.1" },
+    { name = "torchaudio", marker = "extra == 'gpu'", specifier = "==2.4.1" },
+    { name = "torchvision", marker = "(sys_platform == 'linux' and extra == 'gpu') or (sys_platform == 'win32' and extra == 'gpu')", specifier = "==0.19.1", index = "https://download.pytorch.org/whl/cu124" },
+    { name = "torchvision", marker = "sys_platform != 'linux' and sys_platform != 'win32' and extra == 'gpu'", specifier = "==0.19.1" },
     { name = "yt-dlp", specifier = ">=2023.12.30" },
 ]
 provides-extras = ["gpu"]
@@ -76,6 +84,15 @@ dependencies = [
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/16/ce/8a777047513153587e5434fd752e89334ac33e379aa3497db860eeb60377/anyio-4.12.0.tar.gz", hash = "sha256:73c693b567b0c55130c104d0b43a9baf3aa6a31fc6110116509f27bf75e21ec0" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/7f/9c/36c5c37947ebfb8c7f22e0eb6e4d188ee2d53aa3880f3f2744fb894f0cb1/anyio-4.12.0-py3-none-any.whl", hash = "sha256:dad2376a628f98eeca4881fc56cd06affd18f659b17a747d3ff0307ced94b1bb" },
+]
+
+[[package]]
+name = "aspose-note-foss"
+version = "26.9.0"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/3d/38/226b75c69c74d52e5760abb38c98da8947a8f5aea94abbfe5d60f1975dfe/aspose_note_foss-26.9.0.tar.gz", hash = "sha256:fab478adb736a168e71332662f2e92b8c3ea35b7a7c4df7a1d73800aff03fcd0" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/01/59/e1a639d0f4ff2cee44eb9377bae6fe1936b8b5e796ed4f175d5bf5e84138/aspose_note_foss-26.9.0-py3-none-any.whl", hash = "sha256:477737d6cbbc11aadefe23ccb679178a5f9b186b4f11c5cf8b18c4ff53517c7b" },
 ]
 
 [[package]]
@@ -128,6 +145,15 @@ source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/21/28/9b3f50ce0e048515135495f198351908d99540d69bfdc8c1d15b73dc55ce/blinker-1.9.0.tar.gz", hash = "sha256:b4ce2265a7abece45e7cc896e98dbebe6cead56bcf805a3d23136d145f5445bf" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/10/cb/f2ad4230dc2eb1a74edf38f1a38b9b52277f75bef262d8908e60d957e13c/blinker-1.9.0-py3-none-any.whl", hash = "sha256:ba0efaa9080b619ff2f3459d1d500c57bddea4a6b424b60a91141db6fd2f08bc" },
+]
+
+[[package]]
+name = "cached-property"
+version = "2.0.1"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/76/4b/3d870836119dbe9a5e3c9a61af8cc1a8b69d75aea564572e385882d5aefb/cached_property-2.0.1.tar.gz", hash = "sha256:484d617105e3ee0e4f1f58725e72a8ef9e93deee462222dbd51cd91230897641" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/11/0e/7d8225aab3bc1a0f5811f8e1b557aa034ac04bdf641925b30d3caf586b28/cached_property-2.0.1-py3-none-any.whl", hash = "sha256:f617d70ab1100b7bcf6e42228f9ddcb78c676ffa167278d9f730d1c2fba69ccb" },
 ]
 
 [[package]]
@@ -194,6 +220,15 @@ wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/4b/51/8ade005e5ca5b0d80fb4aff72a3775b325bdc3d27408c8113811a7cbe640/charset_normalizer-3.4.4-cp314-cp314-win_amd64.whl", hash = "sha256:8a6562c3700cce886c5be75ade4a5db4214fda19fede41d9792d100288d8f94c" },
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/da/5f/6b8f83a55bb8278772c5ae54a577f3099025f9ade59d0136ac24a0df4bde/charset_normalizer-3.4.4-cp314-cp314-win_arm64.whl", hash = "sha256:de00632ca48df9daf77a2c65a484531649261ec9f25489917f09e455cb09ddb2" },
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/0a/4c/925909008ed5a988ccbb72dcc897407e5d6d3bd72410d69e051fc0c14647/charset_normalizer-3.4.4-py3-none-any.whl", hash = "sha256:7a32c560861a02ff789ad905a2fe94e3f840803362c84fecf1851cb4cf3dc37f" },
+]
+
+[[package]]
+name = "chevron"
+version = "0.14.0"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/15/1f/ca74b65b19798895d63a6e92874162f44233467c9e7c1ed8afd19016ebe9/chevron-0.14.0.tar.gz", hash = "sha256:87613aafdf6d77b6a90ff073165a61ae5086e21ad49057aa0e53681601800ebf" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/52/93/342cc62a70ab727e093ed98e02a725d85b746345f05d2b5e5034649f4ec8/chevron-0.14.0-py3-none-any.whl", hash = "sha256:fbf996a709f8da2e745ef763f482ce2d311aa817d287593a5b990d6d6e4f0443" },
 ]
 
 [[package]]
@@ -321,12 +356,36 @@ wheels = [
 ]
 
 [[package]]
+name = "frozendict"
+version = "2.4.7"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/90/b2/2a3d1374b7780999d3184e171e25439a8358c47b481f68be883c14086b4c/frozendict-2.4.7.tar.gz", hash = "sha256:e478fb2a1391a56c8a6e10cc97c4a9002b410ecd1ac28c18d780661762e271bd" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/38/74/f94141b38a51a553efef7f510fc213894161ae49b88bffd037f8d2a7cb2f/frozendict-2.4.7-py3-none-any.whl", hash = "sha256:972af65924ea25cf5b4d9326d549e69a9a4918d8a76a9d3a7cd174d98b237550" },
+]
+
+[[package]]
 name = "fsspec"
 version = "2025.12.0"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/b6/27/954057b0d1f53f086f681755207dda6de6c660ce133c829158e8e8fe7895/fsspec-2025.12.0.tar.gz", hash = "sha256:c505de011584597b1060ff778bb664c1bc022e87921b0e4f10cc9c44f9635973" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/51/c7/b64cae5dba3a1b138d7123ec36bb5ccd39d39939f18454407e5468f4763f/fsspec-2025.12.0-py3-none-any.whl", hash = "sha256:8bf1fe301b7d8acfa6e8571e3b1c3d158f909666642431cc78a1b7b4dbc5ec5b" },
+]
+
+[[package]]
+name = "genanki"
+version = "0.13.1"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "cached-property" },
+    { name = "chevron" },
+    { name = "frozendict" },
+    { name = "pyyaml" },
+]
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/e6/07/4459ffd44e8abfd52743f915ab6c0d4c227ee9da3f7f649c930146a93438/genanki-0.13.1.tar.gz", hash = "sha256:84d090423a8879520465bfe9784083edacb8d35e2ba511fa5a1bdef01d8f71ed" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/af/7e/6c74ea7aaf2a36fd7df281267fade72e1f06ed1e44315bd77af2c6f82800/genanki-0.13.1-py3-none-any.whl", hash = "sha256:65b59434008588a1213b940474d1aca8cca83243af6fc0e26200b560efe4d9e3" },
 ]
 
 [[package]]
@@ -477,6 +536,30 @@ wheels = [
 ]
 
 [[package]]
+name = "intel-cmplr-lib-ur"
+version = "2026.1.2"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "umf" },
+]
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/80/f0/b7e8305da2d2ea162599795886d03a809bf1554ec5079c59f147b506f277/intel_cmplr_lib_ur-2026.1.2-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:b27207f3b42d12ce88cd53ca8b3b7a7e79755aa07a84eccf1c209fcbefe468bf" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/83/52/bf0781e69da7f02141635b68c16daa7756e980f0ba29f78a7f4332ee3985/intel_cmplr_lib_ur-2026.1.2-py2.py3-none-win_amd64.whl", hash = "sha256:e2ef94d758948a5c52090f723bc113b8614a8a4187f017668d0375b72a8be653" },
+]
+
+[[package]]
+name = "intel-openmp"
+version = "2026.1.2"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "intel-cmplr-lib-ur" },
+]
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/8b/4d/27cb1284bee222fdd4f4280a651c264031bc1f8ebbdbd29cdfd0f906a466/intel_openmp-2026.1.2-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:4612231a3605db891265c1d8cc4af49ee66009dc55f24012770a9faf3d8ac35e" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/0c/a8/7b7c00ac0f74cedf36f8623c5eb57fe43d0e172b8ce939043f63beb1f16e/intel_openmp-2026.1.2-py2.py3-none-win_amd64.whl", hash = "sha256:c5fd1bfb8306f7a21abc7494c700ca117bf4abbde841e48b263904ac50b1d694" },
+]
+
+[[package]]
 name = "itsdangerous"
 version = "2.2.0"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
@@ -608,18 +691,75 @@ wheels = [
 
 [[package]]
 name = "numpy"
-version = "1.26.4"
+version = "2.5.3"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
-sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/65/6e/09db70a523a96d25e115e71cc56a6f9031e7b8cd166c1ac8438307c14058/numpy-1.26.4.tar.gz", hash = "sha256:2a02aba9ed12e4ac4eb3ea9421c420301a0c6460d9830d74a9df87efa4912010" }
+sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/13/01/11703282db468b85f6f7b8c7f22d058de5970d5c7e60a3a8aaa313c3de36/numpy-2.5.3.tar.gz", hash = "sha256:df2d5874ff183595a4ba404edd04f6bd9b5505c1d7708573f6a6c17489a67563" }
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/95/12/8f2020a8e8b8383ac0177dc9570aad031a3beb12e38847f7129bacd96228/numpy-1.26.4-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:b3ce300f3644fb06443ee2222c2201dd3a89ea6040541412b8fa189341847218" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/75/5b/ca6c8bd14007e5ca171c7c03102d17b4f4e0ceb53957e8c44343a9546dcc/numpy-1.26.4-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:03a8c78d01d9781b28a6989f6fa1bb2c4f2d51201cf99d3dd875df6fbd96b23b" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/79/f8/97f10e6755e2a7d027ca783f63044d5b1bc1ae7acb12afe6a9b4286eac17/numpy-1.26.4-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9fad7dcb1aac3c7f0584a5a8133e3a43eeb2fe127f47e3632d43d677c66c102b" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/0f/50/de23fde84e45f5c4fda2488c759b69990fd4512387a8632860f3ac9cd225/numpy-1.26.4-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:675d61ffbfa78604709862923189bad94014bef562cc35cf61d3a07bba02a7ed" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/4c/0c/9c603826b6465e82591e05ca230dfc13376da512b25ccd0894709b054ed0/numpy-1.26.4-cp312-cp312-musllinux_1_1_aarch64.whl", hash = "sha256:ab47dbe5cc8210f55aa58e4805fe224dac469cde56b9f731a4c098b91917159a" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/76/8c/2ba3902e1a0fc1c74962ea9bb33a534bb05984ad7ff9515bf8d07527cadd/numpy-1.26.4-cp312-cp312-musllinux_1_1_x86_64.whl", hash = "sha256:1dda2e7b4ec9dd512f84935c5f126c8bd8b9f2fc001e9f54af255e8c5f16b0e0" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/28/4a/46d9e65106879492374999e76eb85f87b15328e06bd1550668f79f7b18c6/numpy-1.26.4-cp312-cp312-win32.whl", hash = "sha256:50193e430acfc1346175fcbdaa28ffec49947a06918b7b92130744e81e640110" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/16/2e/86f24451c2d530c88daf997cb8d6ac622c1d40d19f5a031ed68a4b73a374/numpy-1.26.4-cp312-cp312-win_amd64.whl", hash = "sha256:08beddf13648eb95f8d867350f6a018a4be2e5ad54c8d8caed89ebca558b2818" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/d6/50/8fdbb16af64895706a45f06a4068e29db732ec180f3c1375f14123359138/numpy-2.5.3-cp312-cp312-macosx_10_13_x86_64.whl", hash = "sha256:cb189f09db39283b26bfd061ec16189e14f71c6755207f72a0f7540867afe5b9" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/60/39/789131c1188c078dcb3a1692e72e1e050c68b88ffe72c9ccaac9bcd7a9cd/numpy-2.5.3-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:f59a878c33d6b88122d80d239bb3b845d58708750b0cb06a09aebb9b18ec696c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9c/59/a312e95696e5f601914dd8b6dd844692ba61670807417e24b68e337b5c70/numpy-2.5.3-cp312-cp312-macosx_14_0_arm64.whl", hash = "sha256:a72f874bc9e10e4b8f80426fb49716d5141f64442a0c8418065093ec8017fbb0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/30/d0/5623a1707ed4fe16e3909fe3cf5ee3da004ae677ad23d83bbf3adf1a6faf/numpy-2.5.3-cp312-cp312-macosx_14_0_x86_64.whl", hash = "sha256:fc36dc566135b5eceec4cf89758fcb719266a019ef07dae1754ae7c9f617ef3e" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/f1/32/84146fc020ad3c25f805f70ab60da46fe3c540a21369754a7e4369754b6f/numpy-2.5.3-cp312-cp312-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:76c2c1e6bfa5c84adc6434dfbf013aa92096a7985221762c8f11fedfd20fff58" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/65/af/aa78d1a88805456e212b65461354cd943197fb9acecc4c90fd12295123a3/numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b7e18c623bb5c95acb3b3328861272816ba199fb531921c5d6d0b675f1fde9e3" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/3b/24/faa79d865e69a97ba17473b23a1b74094b2259c03e820c70297293b9ea49/numpy-2.5.3-cp312-cp312-musllinux_1_2_aarch64.whl", hash = "sha256:4f8929ee6c96bfbd7b4ed2032e0c03af86fe1826740ab61ddabf9072d06e57ff" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/62/4a/8877e629445a7176297dffcaf9c485faa96a95d81728a62521ad55bd4c0f/numpy-2.5.3-cp312-cp312-musllinux_1_2_x86_64.whl", hash = "sha256:b5d93cf48f687479941d12b69c873ad2cc76bbd487f0091c2200636497f34034" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c8/db/35e1c2d38b04cbd5b731f9d71495e055e813197669d22b612f11748d2ff9/numpy-2.5.3-cp312-cp312-win32.whl", hash = "sha256:bf63afbe037eb5d2fe87fbcc7778e61da53ebaf21d938a4515aa73b62532a5d4" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/3c/a1/accf6d4f0c80c5d9ba9735d6b1550e444180599f34dec69ca01360f717ad/numpy-2.5.3-cp312-cp312-win_amd64.whl", hash = "sha256:0a59a421a32580a009e8a1751345bf829631b990dc1794b80514ab722b435def" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/22/43/1764aff32e4652526ae2f71fa8b3efd8d25c8a3d6926914454e47138ed1e/numpy-2.5.3-cp312-cp312-win_arm64.whl", hash = "sha256:ccb32e0525d29e8b0572eb84c9a57af0e7a4e615726927506f55063c62414034" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/79/e5/8fb89cd46d14e35699d13bf943a5f5f441ecee8667120a1f6105ab89e349/numpy-2.5.3-cp313-cp313-macosx_10_13_x86_64.whl", hash = "sha256:66a78fe4556c60aceda5916f9eacd638b18e9e681016ec302dcb4682d6d4d034" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/2f/06/9dc9e48b5e5e941c8b10350c5ff2d721da42a20517d911d15544246775ff/numpy-2.5.3-cp313-cp313-macosx_11_0_arm64.whl", hash = "sha256:92f30e89b8ee0ecf363033576c422b2f58fed6a80bed0aa48dff6d14c654663e" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/ab/2a/98282aa5b8f58b1157d440bb6282eed47e3632a5de53a714fbab17e659fe/numpy-2.5.3-cp313-cp313-macosx_14_0_arm64.whl", hash = "sha256:f9a2353b37a1a9e78fd82b27ad7e2a32a2d036604d18f02b05e3136c62ca3b09" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a1/f9/b6533d777be9d6ffd29dc1be0867e563e6e8cc9a220ff1b716adc317f060/numpy-2.5.3-cp313-cp313-macosx_14_0_x86_64.whl", hash = "sha256:ccbc4665079665c3cf3bab4db9f6b095370cd6437d66be549b6c2a1fd19e1958" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/73/85/735720d04ec197c5dcfacdfc9922667c7f1f5f496a279b7ba4d7c74c4cc7/numpy-2.5.3-cp313-cp313-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:c76d5dde9f445058f83d0c02af00557a4db91de9a9a57c0df87d1535001d654b" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/3a/1b/3b16a9bc514a440a7a0883684111dcb1ef1aee960af2ca95da8fc775f124/numpy-2.5.3-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a5fa86b80fd24bcd1aff83ad23be44ea323de3f787be8f8b15d4a65621e25321" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/69/c4/386f397831b07328b639c96c5b62719346cf4baf07c68d927239752b1534/numpy-2.5.3-cp313-cp313-musllinux_1_2_aarch64.whl", hash = "sha256:bd4cb9ad3c7889b9b3fe0a9a9fb5d2ed26f9879bff2608d9f01aed147a20d231" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/5f/3e/a700ecbf36e85ae8328fd3b0e12eeddc22ed6358a64cb2bd913e0d195d65/numpy-2.5.3-cp313-cp313-musllinux_1_2_x86_64.whl", hash = "sha256:1302b90c0e52281681b2975adfe8a860cb7b12216a27b4b0b4207c44bf7bccf0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/41/ee/38e785e88a4045f6ad1d1f2808dcdfafdca48c760260c0587bf171e29fc9/numpy-2.5.3-cp313-cp313-win32.whl", hash = "sha256:1c80eabb4035ecf4ca9cd49cde8a9fdd69a729e63e6474887d1523ade7aa277f" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/f3/ec/100f2b1794ede74a9b3d7ec6b9736927f56713414c1dfe19ab6c383494bf/numpy-2.5.3-cp313-cp313-win_amd64.whl", hash = "sha256:71cad2b2a7451ab79d8f5e71b453485b6775963d5cf794179144a7463fe6e8ec" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/80/b1/7dc825ca94c12acebbce4c37caa5e198695eb31424bc579679f32b1bb49d/numpy-2.5.3-cp313-cp313-win_arm64.whl", hash = "sha256:8e4dd766076855b5ff7ea52fa5f07ce26286726e0f8bff446b7739d02e6ea204" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/70/78/cf416f15dc29375a229d9dfebf8db6e313f291580b39fa1a568b6052bb07/numpy-2.5.3-cp314-cp314-macosx_10_15_x86_64.whl", hash = "sha256:350ba9783ce969cf9f7ce6e6a9a58e1a6e2a19ca025b7ee448c4db727706212a" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9e/59/abcc2d8def4fd60eec7d87f92d27c13448ffd9ab14339bcc63a0d7a2fdea/numpy-2.5.3-cp314-cp314-macosx_11_0_arm64.whl", hash = "sha256:012e66aca395d795496446e52aeeb5866312a5d4d3f27da270e5a0b43f70dc5c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/94/75/4640d2d6e4b64a049e48425a82728a41ef4adb61332d2cba68055774878b/numpy-2.5.3-cp314-cp314-macosx_14_0_arm64.whl", hash = "sha256:adc1ada2662f8a5f960b8a10d9986897e7499ef07e06d4cfe7197f8cce923c07" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/96/cd/625b57ae33d4ca560f32cc0b47b4a5922146d9beb998ddf773900d440a73/numpy-2.5.3-cp314-cp314-macosx_14_0_x86_64.whl", hash = "sha256:54a115e5a73b8fc44f0cebef486365a1894b5c9760685d4558b72b7c3eb846e0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9c/72/12918652e7912ef9751e8694c88820fcd1908e0618cb23f5f3caa6004b7b/numpy-2.5.3-cp314-cp314-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:be5a8381859b6da607c84f4f7d6847725f1cf1853ef8a2c9e115b7d58bef47dc" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/45/8f/9beacf79ca7c650688ad0baa80931adb988fe6e6e5d5903c23cc3dbd70eb/numpy-2.5.3-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:b0521d0f4aebb6e06189451025fa17a913287b13c03d5fe05c017333b654ea5b" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/09/8d/41d0a56e1ac4c87495c897a211b1368691b7237aadabec8b3b8f3a74d48f/numpy-2.5.3-cp314-cp314-musllinux_1_2_aarch64.whl", hash = "sha256:9deb49575e5b0b94ed72c8a64ec4d033381adc27e9060ae842971f697ba96104" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/08/1e/0dfbc5cc251d54e2af790f254d24ec38637fa97ec7d5d11de7ffed787098/numpy-2.5.3-cp314-cp314-musllinux_1_2_x86_64.whl", hash = "sha256:b00eefbcf0f292945c4b4dec2ae845389ef5bcdcd596e6e4328051db5b5ba694" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b5/2c/dfa40f6991f8185c8c30ffd023dfcbb11888e823cfab9557b920f3bb7bed/numpy-2.5.3-cp314-cp314-win32.whl", hash = "sha256:c2381f82999704f818e2c987a865050e285ec3621262c66d40f5a96c8f899f8e" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a4/73/d2c08231e4fde7e415501fd02c715d96e98599b2d8384445933944152984/numpy-2.5.3-cp314-cp314-win_amd64.whl", hash = "sha256:2c25dfa72943e4336ddb6b0ee4277b47a0c85bede0807530ec68103bf58e2c10" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/5c/e9/dcdcc9b95cf5f49815055573aee1b11cfbf5299f38a180e437ded050810f/numpy-2.5.3-cp314-cp314-win_arm64.whl", hash = "sha256:15aa985ac73a8db02db7663381aa109510449d3819d37206caed27b33a65a8a6" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/49/c4/af8bc08a7ef4e1529a7c0cf24969accce316b783999802089a581ec99272/numpy-2.5.3-cp314-cp314t-macosx_11_0_arm64.whl", hash = "sha256:ac7bb1c52d445bd4f8f7f97fefe6abc3a084dc4d63df50d79b17fa2b78e89297" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c5/ae/0f15eb56d4ec5e13c1f7ff04ff407f997d1acbadb45d3e1f2e2645a8f43c/numpy-2.5.3-cp314-cp314t-macosx_14_0_arm64.whl", hash = "sha256:e6ab667ba76450084eb64013762c438ea76d9d29cc676dcd6c2e9892ba37f841" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/23/fb/c72a8f25d4b6e96c354e7ab45ace3b27dc11e5d6a13b6c7d0cd6b08bf112/numpy-2.5.3-cp314-cp314t-macosx_14_0_x86_64.whl", hash = "sha256:f7fabeb6cea87d65f3b926de33d03fb016cfdc29314c90974383b5582ae72891" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/07/a9/968c90ed2ab15060c338e8137f1215b5a60756ae07328e0a60d1c6734df4/numpy-2.5.3-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1fb6f8fb9ff0b3a69f52c66ce397b0246583e9f28616231b0e32ca49259a5fa6" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/59/08/9df04103947b95e3b6b1f2ed1a70521f325647a31b82da6a2aae3a485508/numpy-2.5.3-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:93e1f5447e2b1e479d7bd74701e84746b86450cff1fc368b132d195e2b8f8211" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/41/a0/14c8d5fe5b53a334aabb653deb391c0fef49558f491880ea300ed6785224/numpy-2.5.3-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:c00abe94c1a69d75d827dcf1c025b25c8a45d230b3bcd77a9020883a1b047653" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c4/a6/d7e96e42f01522e154c32489640f16dfc4f6181d165d05fc3bec8c2c4999/numpy-2.5.3-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:536f963710a4e63934d80ac0dc4f478804a83e9a84b6828018f25d09953ada33" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/25/39/3453afb7119d0449ef11c886874120ff180e2c337760e0e2d88f70f1a945/numpy-2.5.3-cp314-cp314t-win32.whl", hash = "sha256:4c8a6d2ebce6305fd82fbefca827775437147052a976ee7c94b36a0c1b52ac6c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/99/01/22815d2b19a1a746b1d45205cffebb3fe511a18acb75fba6c88491fc9894/numpy-2.5.3-cp314-cp314t-win_amd64.whl", hash = "sha256:9a37475425b431b4d060f23b4f52cd2f3aef6bc7c654bd760adf0040eec9d435" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fa/ee/a7cbba67eeaff038dc29ca8b98a88396c8b0cc9c89d4924f4a27a5c9150b/numpy-2.5.3-cp314-cp314t-win_arm64.whl", hash = "sha256:2d8240cb4c16fd831074aa2b2cf9fc54664d826341d61c372245b96a74a49a9a" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/45/56/78194492883ff5eec90423fe56a3a44b154da047d88a6307f629713c584f/numpy-2.5.3-cp315-cp315-macosx_10_15_x86_64.whl", hash = "sha256:a6391fafaba97500887132cd582abc6e19452b1ac775a47caa7b24490e152058" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/11/39/dd55c0af90bbab564b09ae3b0aa60ec5c02b900fa4f1ba23440525c8b32d/numpy-2.5.3-cp315-cp315-macosx_11_0_arm64.whl", hash = "sha256:09d5a423c71ad5feb5625844ad58050e35df43871004b52ac9c0ad44a56775be" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b6/51/04f67d32e4862b281b1cb84ceeaed3421189a84fb6fb51a391cd6d5009f7/numpy-2.5.3-cp315-cp315-macosx_14_0_arm64.whl", hash = "sha256:f9579f383d1bf9df80081e72760e84960a7fd4f88cf0c9e535a8597c9bb646f5" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a3/c9/25b4dc0dd1344ec26c7319e84fd4e9809d2b5628f4e12decd618036e5178/numpy-2.5.3-cp315-cp315-macosx_14_0_x86_64.whl", hash = "sha256:86bff898a431c0fb71f7610b75726e75a54d47b37edc9d537f48de63bb3c0b90" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fc/c7/29285be1e5232a6e7ee3268a33c85843f5a8ee93350c6465cddd66ebbf76/numpy-2.5.3-cp315-cp315-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:1f3ed25271581281f2fccb1adcedfcde4c07362eec69189b50baf6f90e3ae159" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/55/49/bbad5335fb4996a16881f853ff3e0ba582f01720e55c89b1c06b8fc42a90/numpy-2.5.3-cp315-cp315-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:ffdc76bfcae6b255dff75202c5e7feaf95b40246bc0a17944facc1fecf9f79ab" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/ef/e9/1df35483760b04a65ea44669f89dc64f30e5aca098b48ceb8b1310b0e0fe/numpy-2.5.3-cp315-cp315-musllinux_1_2_aarch64.whl", hash = "sha256:116f96cadd935c6122e9228d676fe7ede19e741f5c8bb1c3cddbe0c51ccebea2" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b8/99/66e54da8265cc8be8a7382bf96edce17aaa2837d6f484432025932a3caa5/numpy-2.5.3-cp315-cp315-musllinux_1_2_x86_64.whl", hash = "sha256:09ffa5d903faeaa5c4dd05009cf81c8bab9f2cb37c548b8d39b65b4cfa7c97f7" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/01/bc/b5e90a91c115168d793dfd2ad9c69c438c2fe7a13a437e770bc5b078e732/numpy-2.5.3-cp315-cp315-win32.whl", hash = "sha256:e01c918ac3d48e18a927cf7b14a26a3e29ff2bdf2eacb976da0aecd6a43ed034" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/37/ea/780748fd3985109075514ef8fc64cd25f943e40dde13a6d59141eb268fc8/numpy-2.5.3-cp315-cp315-win_amd64.whl", hash = "sha256:e931e4f499e0dc7ef29d269a8e5b35dd722e5d14be07df6240166ea7c6532fae" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/b3/16/407be69a2a87c8cab64d95975a8977a426a29e138f07e276ec258f0fe4e5/numpy-2.5.3-cp315-cp315-win_arm64.whl", hash = "sha256:26e15e4aecd8617dfbaecb37d223e365d7b39411fba20454be2670a96aa74cb5" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/44/bf/a97ffb01e41d50a32a9177aef942a4d0e389a3daf451d04e5f38ef6afb87/numpy-2.5.3-cp315-cp315t-macosx_10_15_x86_64.whl", hash = "sha256:6cef4bb1706dfec49243c05d921eefb4e190d41e2528b30d8035ea1f36b4c24a" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/d1/24/136c02f2c2af9a067a84d0c3aa10c99012c0476fa5066732fa4a4202557d/numpy-2.5.3-cp315-cp315t-macosx_11_0_arm64.whl", hash = "sha256:d1c89973648c85069c5046ad460f7b8a00218b29a2e42359ac8cc63e9ab94832" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fe/6c/b47582d6597789bf946d5efbeb6b9e56fd8bcbd5efc6fbf51dbe1ea31eb3/numpy-2.5.3-cp315-cp315t-macosx_14_0_arm64.whl", hash = "sha256:214045a5bf00113a146ab9ee9730c44501af6723cdf1f6830932f7b5ef2e7af0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/be/b4/ef3cc6da73774202d4deae16bb321fd8298a4e0561e3539f8c4be237d916/numpy-2.5.3-cp315-cp315t-macosx_14_0_x86_64.whl", hash = "sha256:8617bbfae4486cf99c9f899966699428d19da931d06ca94ad3da986c76e15997" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9e/24/e3813329498596cb842703dcacac1741612ed9fb9c4e6a3e0c7e2ebbc597/numpy-2.5.3-cp315-cp315t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:595d020938c84e320bcf40ad71089e108eac0d377cd018e14a8c094f39e98d85" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/4a/9e/4e7a07fd0776dc2210cdacf2010be8665194d094defc10c419d7dea794cc/numpy-2.5.3-cp315-cp315t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:6f24021b9f22bc6301c37b196974a92c1c18dccedb6fef3dd252e95f2d6adbe4" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/91/db/01674c0e20335057813a00c2ebd546ed25bff9ed7914f9bced00f8c55d94/numpy-2.5.3-cp315-cp315t-musllinux_1_2_aarch64.whl", hash = "sha256:71b39d9f935b6ec0f8753e3e2afb51e3efba6f2e05b68b32a40754d24bcd4a3c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/45/7a/584c5e71f8d378e57cac0b033891ed65c683ef90573ba4854e8c28203db0/numpy-2.5.3-cp315-cp315t-musllinux_1_2_x86_64.whl", hash = "sha256:6b05c171afb3aa07adbd20abc00aea86fe375beb0fdb9ef780ec5b7f63bab1c0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a1/d2/4e1014173aa3c55e6a756e0e567290743a6ab33a288460374d7ef6bcd239/numpy-2.5.3-cp315-cp315t-win32.whl", hash = "sha256:f54660b0eb6b0b9f36e7fe1cdfdff472028dd0d14acd9b9b65098efbad059469" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/6c/b0/ff5658a58199b7bcaad87bf260eef6713d9d42cca4e028f935b4fc5fbac6/numpy-2.5.3-cp315-cp315t-win_amd64.whl", hash = "sha256:1aad64d99730d013cfc6debafed22783b4fc5a7f4b8bc744d2d8cf7dcc880551" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/fb/0b/b12a2df5d1b774bd9007a6fdff9381145b6223d37f11afc9c37ab0efd9a1/numpy-2.5.3-cp315-cp315t-win_arm64.whl", hash = "sha256:befa1ae5bd6030b3f512b43ff3fa5290bbed6b84411a44244b14adf835f5b89d" },
 ]
 
 [[package]]
@@ -1117,6 +1257,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tcmlib"
+version = "1.5.0"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/60/24/aa409bb20703acc70cf4d3bc620a55c789639c2995b2667fb44ae7236ec9/tcmlib-1.5.0-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:9d7c01cff35aae9bf5390b620680ebdf10a7d211c22d6488a27a029502e7d0aa" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/67/6d/9095c93326d0f8a5469ab22480d02795f24c08f1e7f383c73316ff106347/tcmlib-1.5.0-py2.py3-none-win_amd64.whl", hash = "sha256:f7b62787214083d490b39d7650f1e477eeacc875e7f86799feb9aa1fd34460d4" },
+]
+
+[[package]]
 name = "tokenizers"
 version = "0.22.1"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
@@ -1143,7 +1292,7 @@ wheels = [
 
 [[package]]
 name = "torch"
-version = "2.4.0"
+version = "2.4.1"
 source = { registry = "https://download.pytorch.org/whl/cu124" }
 resolution-markers = [
     "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'",
@@ -1158,12 +1307,12 @@ dependencies = [
     { name = "typing-extensions", marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torch-2.4.0-cp312-cp312-linux_aarch64.whl", hash = "sha256:4b7e55c2eb9929a13abb9e39aea0297aa0c0a824b1c441a2d57c1853938312b0" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torch-2.4.1-cp312-cp312-linux_aarch64.whl", hash = "sha256:95596ba01b369898602f4fc0a885a874e2a45c99754a72ac6760d8aa3fe61ebc", upload-time = "2024-09-06T22:15:06Z" },
 ]
 
 [[package]]
 name = "torch"
-version = "2.4.0"
+version = "2.4.1"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 resolution-markers = [
     "sys_platform != 'linux' and sys_platform != 'win32'",
@@ -1178,12 +1327,12 @@ dependencies = [
     { name = "typing-extensions", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
 ]
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c7/87/489ebb234e75760e06fa4789fa6d4e13c125beefa1483ce35c9e43dcd395/torch-2.4.0-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:91aaf00bfe1ffa44dc5b52809d9a95129fca10212eca3ac26420eb11727c6288" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/ac/30/8b6f77ea4ce84f015ee024b8dfef0dac289396254e8bfd493906d4cbb848/torch-2.4.1-cp312-none-macosx_11_0_arm64.whl", hash = "sha256:72b484d5b6cec1a735bf3fa5a1c4883d01748698c5e9cfdbeb4ffab7c7987e0d" },
 ]
 
 [[package]]
 name = "torch"
-version = "2.4.0+cu124"
+version = "2.4.1+cu124"
 source = { registry = "https://download.pytorch.org/whl/cu124" }
 resolution-markers = [
     "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'",
@@ -1211,29 +1360,29 @@ dependencies = [
     { name = "typing-extensions", marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torch-2.4.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:f6c94ca3a403e79fd25d4bc2ea7325de7c6682a372c5d525b65b06367b1cc618" },
-    { url = "https://download.pytorch.org/whl/cu124/torch-2.4.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:22bc926ac3c2f2e4f483f2a201a0ab8a701cc1104ddd74469763f652f3856ec2" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torch-2.4.1%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:975a1d0540ebe05f6f88f692bb9d848f7fac035343a91aef08f2b8d0040dde8c", upload-time = "2024-09-06T22:04:06Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torch-2.4.1%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:d077728576768acbf0e4ce1b87164d1f3f75c17a9b1676c09e84c32ceeac1c06", upload-time = "2024-09-06T22:04:45Z" },
 ]
 
 [[package]]
 name = "torchaudio"
-version = "2.4.0"
+version = "2.4.1"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 dependencies = [
-    { name = "torch", version = "2.4.0", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
-    { name = "torch", version = "2.4.0", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torch", version = "2.4.0+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.4.1+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
 ]
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/cf/1e/2139b508cb4716f98b972d8fd76084277d57faa5face86b007c495da52ac/torchaudio-2.4.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:ae13a95ef6fabcadb0eff36d85f5048d70474a2e9704fa9c86e9903cbcec0d4a" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c8/e7/ff8dfb30f44288c01baf39603827955c7c95ddfbee732fb65acf32f571e1/torchaudio-2.4.0-cp312-cp312-manylinux1_x86_64.whl", hash = "sha256:4782a49171d94431bb815a55aa72733f5fe38034bdf6adeced28c226e2cc791b" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/6e/a7/06ee10dfeb5e8ac2fdef29a754ed100039f5d899dd21ccec4cfad614afec/torchaudio-2.4.0-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:534d1907bb252ecd2ba9e1d61cff7220fd66090e63df7b3c109cea77a19d4cb8" },
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/33/56/6d6db4673ede22d814cf0f5cb6920b997d605fdff21a28b7ffa3b555c330/torchaudio-2.4.0-cp312-cp312-win_amd64.whl", hash = "sha256:473c149c1c5288f4ce7b609c5ecb7b2528e7958ea701147a20413d65e5a8a59c" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/f7/63/ca0921398395834db67c52e2a0d0a4edec8077875c8ef825cb1ef81b86f7/torchaudio-2.4.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:953946cf610ffd57bb3fdd228effa2112fa51c5dfe36a96611effc9074a3d3be" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/59/0c/2eaf389ebb377febaef128bce57e7ebdfb5375b959163dd936c06941fe59/torchaudio-2.4.1-cp312-cp312-manylinux1_x86_64.whl", hash = "sha256:1796a8961decb522c47daab0fbe27c057d6d143ee22bb6ae0d5eb9b2a038c7b6" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/7a/d0/4835f9f6d8ea26b633c6331aaff40d9ac52b26bd3e72d91d40f9c83ff5a1/torchaudio-2.4.1-cp312-cp312-manylinux2014_aarch64.whl", hash = "sha256:5b62fc7b16ed708b0c07d4393137797e92f63fc3bd5705607d97ba6a9a7cf3f0" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/9b/f5/d3c9b0ba802e2b8e363c5366b37b6b5fb703ac052a5afc334c36b255401f/torchaudio-2.4.1-cp312-cp312-win_amd64.whl", hash = "sha256:d721b186aae7bd8752c9ad95213f5d650926597bb9060728dfe476986a1ff570" },
 ]
 
 [[package]]
 name = "torchvision"
-version = "0.19.0"
+version = "0.19.1"
 source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 resolution-markers = [
     "sys_platform != 'linux' and sys_platform != 'win32'",
@@ -1241,15 +1390,15 @@ resolution-markers = [
 dependencies = [
     { name = "numpy", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
     { name = "pillow", marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "torch", version = "2.4.0", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }, marker = "sys_platform != 'linux' and sys_platform != 'win32'" },
 ]
 wheels = [
-    { url = "https://mirrors.cloud.tencent.com/pypi/packages/88/6f/53f55c7e390e1fd27d24fdfa36bcb6f717855f311fbea90a15a1fbdef9d4/torchvision-0.19.0-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:c09ef8ed184fa877f6251b620226e74f682b8f1d6b341456428d4955b8d9c670" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/a4/d0/b1029ab95d9219cac2dfc0d835e9ab4cebb01f5cb6b48e736778020fb995/torchvision-0.19.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:27ece277ff0f6cdc7fed0627279c632dcb2e58187da771eca24b0fbcf3f8590d" },
 ]
 
 [[package]]
 name = "torchvision"
-version = "0.19.0+cu124"
+version = "0.19.1+cu124"
 source = { registry = "https://download.pytorch.org/whl/cu124" }
 resolution-markers = [
     "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'",
@@ -1258,12 +1407,12 @@ resolution-markers = [
 dependencies = [
     { name = "numpy", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
     { name = "pillow", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
-    { name = "torch", version = "2.4.0", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
-    { name = "torch", version = "2.4.0+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
+    { name = "torch", version = "2.4.1", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "python_full_version < '3.13' and platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux'" },
+    { name = "torch", version = "2.4.1+cu124", source = { registry = "https://download.pytorch.org/whl/cu124" }, marker = "(python_full_version >= '3.13' and sys_platform == 'linux') or (platform_machine != 'aarch64' and sys_platform == 'linux') or (platform_python_implementation != 'CPython' and sys_platform == 'linux') or sys_platform == 'win32'" },
 ]
 wheels = [
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.19.0%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:2aa511f7073928cc3cab03d1e5524d840a7a17da7f9bde7e771116c233d011e8" },
-    { url = "https://download.pytorch.org/whl/cu124/torchvision-0.19.0%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:0b7ea429f93336fc23fe97d1d163e771d81ad5dfe87a3034036a9168edacf92d" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.19.1%2Bcu124-cp312-cp312-linux_x86_64.whl", hash = "sha256:cc02e67d09cad8ca39dd6a969f517cc35cac3708edbf58a4dfece3ac93a66872", upload-time = "2024-09-06T22:20:52Z" },
+    { url = "https://download-r2.pytorch.org/whl/cu124/torchvision-0.19.1%2Bcu124-cp312-cp312-win_amd64.whl", hash = "sha256:00ba20cb86664c8e51a001662ce320dc52137ee1e072842174e9d0f0b114020c", upload-time = "2024-09-06T22:20:52Z" },
 ]
 
 [[package]]
@@ -1309,6 +1458,18 @@ source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
 sdist = { url = "https://mirrors.cloud.tencent.com/pypi/packages/72/94/1a15dd82efb362ac84269196e94cf00f187f7ed21c242792a923cdb1c61f/typing_extensions-4.15.0.tar.gz", hash = "sha256:0cea48d173cc12fa28ecabc3b837ea3cf6f38c6d1136f85cbaaf598984861466" }
 wheels = [
     { url = "https://mirrors.cloud.tencent.com/pypi/packages/18/67/36e9267722cc04a6b9f15c7f3441c2363321a3ea07da7ae0c0707beb2a9c/typing_extensions-4.15.0-py3-none-any.whl", hash = "sha256:f0fa19c6845758ab08074a0cfa8b7aecb71c999ca73d62883bc25cc018c4e548" },
+]
+
+[[package]]
+name = "umf"
+version = "1.1.0"
+source = { registry = "https://mirrors.cloud.tencent.com/pypi/simple/" }
+dependencies = [
+    { name = "tcmlib" },
+]
+wheels = [
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/c4/72/2e0182f4e6a727a15d0a8a99a82182a4f5bdec1a4f5767acfd2abdc72070/umf-1.1.0-py2.py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:567152c5ee6b8e16cc56b29a8a9a6b918de1febf89877f71ea2e8247ef39fc32" },
+    { url = "https://mirrors.cloud.tencent.com/pypi/packages/2d/43/d89fee46bed22a461714a8786b833a89bff2f0a5e058b02eed3be842752e/umf-1.1.0-py2.py3-none-win_amd64.whl", hash = "sha256:a8c5ff84901fe6348715b6c1c85de4d195a6c69185d99ce4ebf7449b5d04011c" },
 ]
 
 [[package]]
