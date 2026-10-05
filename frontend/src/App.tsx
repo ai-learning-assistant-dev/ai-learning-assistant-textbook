@@ -4,7 +4,8 @@ import WorkspaceConfig from './components/WorkspaceConfig';
 import TaskConfig from './components/TaskConfig';
 import TaskList from './components/TaskList';
 import CourseEditor from './components/CourseEditor';
-import CookieConfig from './components/CookieConfig'; 
+import CookieConfig from './components/CookieConfig';
+import { NotecardPanel } from './panels/notecard';
 import {
   Model,
   Task,
@@ -23,9 +24,27 @@ import {
 } from './types';
 import './App.css';
 
+/** 顶部标签页的标识；新增面板时在此扩展 */
+type TabKey = 'video' | 'course' | 'notecard';
+
+/**
+ * 面板注册表：导航按钮与内容区都由它驱动。
+ *
+ * 新增一个面板只需两步：
+ * 1. 在 TabKey 加一个键；
+ * 2. 在这里加一条 { key, label, icon }。
+ * 按钮的样式与选中判断由本表统一处理，不必再复制粘贴 JSX。
+ */
+const PANELS: ReadonlyArray<{ key: TabKey; label: string; icon: string }> = [
+  { key: 'video', label: '视频下载', icon: '📹' },
+  { key: 'course', label: '课程编辑', icon: '📚' },
+  { key: 'notecard', label: '笔记制卡', icon: '🗂️' },
+];
+
 // 工作区配置功能已添加
 function App() {
-  const [activeTab, setActiveTab] = useState<'video' | 'course'>('video');
+  const [activeTab, setActiveTab] = useState<TabKey>('video');
+
   const [models, setModels] = useState<Model[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [tasks, setTasks] = useState<Record<string, Task>>({});
@@ -414,24 +433,19 @@ function App() {
       <div className="bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-[1400px] mx-auto px-5">
           <div className="flex gap-2">
-            <button
-              onClick={() => setActiveTab('video')}
-              className={`px-6 py-3 font-medium transition-colors ${activeTab === 'video'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
+            {PANELS.map((panel) => (
+              <button
+                key={panel.key}
+                onClick={() => setActiveTab(panel.key)}
+                className={`px-6 py-3 font-medium transition-colors ${
+                  activeTab === panel.key
+                    ? 'text-blue-600 border-b-2 border-blue-600'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
-            >
-              📹 视频下载
-            </button>
-            <button
-              onClick={() => setActiveTab('course')}
-              className={`px-6 py-3 font-medium transition-colors ${activeTab === 'course'
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-600 hover:text-gray-900'
-                }`}
-            >
-              📚 课程编辑
-            </button>
+              >
+                {panel.icon} {panel.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
@@ -503,9 +517,9 @@ function App() {
 
       {activeTab === 'course' && (
         <div className="h-[calc(100vh-60px)]">
-          <CourseEditor 
-            initialData={courseData || undefined} 
-            onSave={handleCourseSave} 
+          <CourseEditor
+            initialData={courseData || undefined}
+            onSave={handleCourseSave}
             workspaces={workspaces}
             models={models}
             appConfig={appConfig}
@@ -513,6 +527,12 @@ function App() {
             onTaskSubmit={handleTaskSubmit}
             tasks={Object.values(tasks)}
           />
+        </div>
+      )}
+
+      {activeTab === 'notecard' && (
+        <div className="h-[calc(100vh-60px)]">
+          <NotecardPanel />
         </div>
       )}
     </div>

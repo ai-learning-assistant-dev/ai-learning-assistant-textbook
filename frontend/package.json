@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "marked": "^18.0.14",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.69.0",

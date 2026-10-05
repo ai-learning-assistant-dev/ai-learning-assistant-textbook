@@ -31,3 +31,85 @@
 html {
     scroll-behavior: smooth;
 }
+
+/* ============================================================
+ * 笔记制卡面板（第三个功能页）暗色系作用域
+ * 仅作用于 .notecard-dark 容器，不影响其余亮色面板。
+ * ============================================================ */
+.notecard-dark ::-webkit-scrollbar-track {
+    background: #1f2937;
+}
+.notecard-dark ::-webkit-scrollbar-thumb {
+    background: #4b5563;
+}
+.notecard-dark ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280;
+}
+.notecard-dark * {
+    scrollbar-color: #4b5563 #1f2937;
+}
+
+/* 下拉选项在暗色下的底色（Chrome / Firefox 会沿用 select 的设定，这里兜底） */
+.notecard-dark select option {
+    background: #111827;
+    color: #e5e7eb;
+}
+
+/* OneNote 预览弹层里的 markdown 渲染：暗色可读 */
+.notecard-dark .markdown-body {
+    color: #e5e7eb;
+}
+.notecard-dark .markdown-body h1,
+.notecard-dark .markdown-body h2,
+.notecard-dark .markdown-body h3,
+.notecard-dark .markdown-body h4,
+.notecard-dark .markdown-body h5,
+.notecard-dark .markdown-body h6 {
+    color: #f3f4f6;
+    border-bottom: 1px solid #374151;
+    padding-bottom: 0.3em;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+}
+.notecard-dark .markdown-body a {
+    color: #60a5fa;
+}
+.notecard-dark .markdown-body code {
+    background: #1f2937;
+    color: #f9a8d4;
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+.notecard-dark .markdown-body pre {
+    background: #111827;
+    color: #e5e7eb;
+    padding: 0.85em 1em;
+    border-radius: 8px;
+    overflow-x: auto;
+}
+.notecard-dark .markdown-body pre code {
+    background: transparent;
+    padding: 0;
+    color: inherit;
+}
+.notecard-dark .markdown-body blockquote {
+    border-left: 3px solid #4b5563;
+    color: #9ca3af;
+    padding-left: 0.8em;
+    margin: 0.6em 0;
+}
+.notecard-dark .markdown-body table {
+    border-collapse: collapse;
+}
+.notecard-dark .markdown-body th,
+.notecard-dark .markdown-body td {
+    border: 1px solid #374151;
+    padding: 0.35em 0.65em;
+}
+.notecard-dark .markdown-body hr {
+    border-color: #374151;
+}
+.notecard-dark .markdown-body img {
+    max-width: 100%;
+}
