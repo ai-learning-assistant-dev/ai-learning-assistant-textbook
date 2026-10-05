@@ -146,23 +146,23 @@ export default function NotecardPanel() {
   }, [preview.data, onToast]);
 
   return (
-    <div className="h-full overflow-auto p-3.5">
+    <div className="notecard-dark h-full overflow-auto p-3.5 bg-gray-900 text-gray-100">
       {/* 标题条 + 报告徽章 */}
-      <div className="mb-3.5 bg-white rounded-xl shadow-lg overflow-hidden">
-        {/* 渐变压到 600~800 档：原来是 emerald-500 → teal-600，整块高饱和翠绿太跳。
-            两处模糊光斑用来打破大面积平涂的平板感，同时不提高整体明度。 */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-emerald-600 via-teal-700 to-teal-800 p-5 text-white">
-          <div className="pointer-events-none absolute -right-6 -top-12 h-32 w-32 rounded-full bg-emerald-300/20 blur-3xl" />
-          <div className="pointer-events-none absolute -bottom-16 left-1/4 h-32 w-52 rounded-full bg-teal-200/10 blur-3xl" />
+      <div className="mb-3.5 bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+        {/* 改为 OneNote 紫渐变（violet-600 → purple-800）：原来 emerald-500 → teal-600 的高饱和翠绿太跳，
+            紫色更贴近 OneNote 品牌色。两处模糊光斑用来打破大面积平涂的平板感，同时不提高整体明度。 */}
+        <div className="relative overflow-hidden bg-gradient-to-r from-violet-600 via-purple-700 to-purple-800 p-5 text-white">
+          <div className="pointer-events-none absolute -right-6 -top-12 h-32 w-32 rounded-full bg-purple-300/20 blur-3xl" />
+          <div className="pointer-events-none absolute -bottom-16 left-1/4 h-32 w-52 rounded-full bg-violet-200/10 blur-3xl" />
           <h1 className="relative text-xl font-bold tracking-wide">🗂️ 笔记制卡</h1>
-          <p className="relative mt-1.5 text-xs text-emerald-50/75">
+          <p className="relative mt-1.5 text-xs text-purple-50/75">
             OneNote / Markdown / 粘贴内容 → 问答题卡片
           </p>
         </div>
         <div className="px-4 py-2.5 flex items-center justify-between gap-3 flex-wrap">
           <ReportBar report={report} />
           {report?.blocking && (
-            <span className="text-xs text-red-600">存在结构性错误，修复后才能导出</span>
+            <span className="text-xs text-red-400">存在结构性错误，修复后才能导出</span>
           )}
         </div>
       </div>

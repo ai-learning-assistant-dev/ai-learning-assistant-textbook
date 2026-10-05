@@ -4,10 +4,10 @@ import type { ReactNode } from 'react';
 import type { Report } from '../types';
 
 const TONE: Record<'ok' | 'warn' | 'err' | 'plain', string> = {
-  ok: 'text-green-700 bg-green-50 border-green-200',
-  warn: 'text-amber-700 bg-amber-50 border-amber-200',
-  err: 'text-red-700 bg-red-50 border-red-200',
-  plain: 'text-gray-600 bg-gray-50 border-gray-200',
+  ok: 'text-green-300 bg-green-500/15 border-green-500/30',
+  warn: 'text-amber-300 bg-amber-500/15 border-amber-500/30',
+  err: 'text-red-300 bg-red-500/15 border-red-500/30',
+  plain: 'text-gray-300 bg-gray-700 border-gray-600',
 };
 
 function Badge({ tone, children }: { tone: keyof typeof TONE; children: ReactNode }) {
@@ -20,7 +20,7 @@ function Badge({ tone, children }: { tone: keyof typeof TONE; children: ReactNod
 
 export default function ReportBar({ report }: { report: Report | null }) {
   if (!report) {
-    return <span className="text-xs text-gray-400">尚未提取</span>;
+    return <span className="text-xs text-gray-500">尚未提取</span>;
   }
 
   const codes = Object.entries(report.by_code || {})

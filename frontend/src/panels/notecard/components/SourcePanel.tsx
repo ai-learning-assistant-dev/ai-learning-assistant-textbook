@@ -11,6 +11,22 @@ import SectionTree from './SectionTree';
 
 const PATH_STORAGE_KEY = 'note2anki.onenote_path';
 const MODEL_STORAGE_KEY = 'note2anki.llm_model';
+const DEFAULT_DECK = 'Note2Anki';
+
+/**
+ * 从笔记对象推出默认牌组名：优先用界面上展示的笔记名（sourceLabel），其次文件名。
+ * - 文件：文件名剥 .md/.txt 扩展名（如「英语语法.md」→「英语语法」）
+ * - OneNote 单页：sourceLabel 形如「分区 / 页标题」，原样用作牌组名
+ * - OneNote 整分区：sourceLabel 形如「分区名（整分区 N 页）」，剥掉尾部括号说明只留分区名
+ * - 手动粘贴：sourceLabel 为空且 filename 是占位 note.md，回落默认 Note2Anki
+ */
+function deriveDeckName(note: NoteSource): string {
+  const raw = (note.sourceLabel || note.filename || '').trim();
+  let name = raw.replace(/\.(md|txt|markdown)$/i, '').trim();
+  name = name.replace(/[（(][^()（）]*[)）]\s*$/, '').trim();
+  if (!name || name.toLowerCase() === 'note') return DEFAULT_DECK;
+  return name;
+}
 
 interface Props {
   note: NoteSource;
@@ -53,7 +69,7 @@ export default function SourcePanel({
   const [modelsLoading, setModelsLoading] = useState<boolean>(false);
   const [modelError, setModelError] = useState<string>('');
 
-  const [deckName, setDeckName] = useState<string>('Note2Anki');
+  const [deckName, setDeckName] = useState<string>(DEFAULT_DECK);
   const [exportHint, setExportHint] = useState<string>('');
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +105,15 @@ export default function SourcePanel({
     };
   }, []);
 
+  // 载入笔记（文件 / OneNote 页 / 整分区 / 粘贴）后，若牌组名仍是默认值，
+  // 自动用界面上显示的笔记名称（sourceLabel 优先，其次文件名）作为默认导出名。
+  // 放在这里可覆盖全部三种来源——OneNote 走 usePreviewContent→setNote，并不经过 setSource。
+  useEffect(() => {
+    if (deckName && deckName !== DEFAULT_DECK) return;
+    const suggested = deriveDeckName(note);
+    if (suggested !== deckName) setDeckName(suggested);
+  }, [note, deckName]);
+
   /** 载入笔记正文：来源可能是 OneNote 页 / 文件 / 粘贴 */
   const setSource = useCallback(
     (text: string, filename: string, label: string) => {
@@ -98,13 +123,8 @@ export default function SourcePanel({
         sourceLabel: label || filename || '',
       };
       onNoteChange(next);
-
-      // 牌组名还是默认值时，用笔记文件名自动填一个
-      if (!deckName || deckName === 'Note2Anki') {
-        setDeckName(next.filename.replace(/\.(md|txt|markdown)$/i, '') || 'Note2Anki');
-      }
     },
-    [deckName, onNoteChange]
+    [onNoteChange]
   );
 
   const handleScan = useCallback(async () => {
@@ -167,7 +187,7 @@ export default function SourcePanel({
       return;
     }
     try {
-      const d = await exportApkg(cards, deckName.trim() || 'Note2Anki');
+      const d = await exportApkg(cards, deckName.trim() || DEFAULT_DECK);
       onExported(d.report);
       const a = document.createElement('a');
       a.href = d.url;
@@ -201,14 +221,14 @@ export default function SourcePanel({
     setOpenBlocks((prev) => ({ ...prev, [key]: !prev[key] }));
 
   return (
-    <section className="bg-white rounded-xl shadow-lg p-4">
-      <h2 className="text-xs font-medium text-gray-500 mb-2">1 · 选择笔记来源</h2>
+    <section className="bg-gray-800 rounded-xl shadow-lg p-4">
+      <h2 className="text-xs font-medium text-gray-400 mb-2">1 · 选择笔记来源</h2>
 
       {/* 来源 A：OneNote（默认展开） */}
-      <div className="border border-gray-200 rounded-lg mb-2 bg-gray-50">
+      <div className="border border-gray-700 rounded-lg mb-2 bg-gray-900/40">
         <button
           onClick={() => toggleBlock('onenote')}
-          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-blue-50"
+          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-gray-700"
         >
           OneNote
           <span className="text-gray-400 text-xs">{openBlocks.onenote ? '▾' : '▸'}</span>
@@ -216,7 +236,7 @@ export default function SourcePanel({
 
         {openBlocks.onenote && (
           <div className="px-3 pb-3">
-            <label className="block text-xs text-gray-500 mb-2.5">
+            <label className="block text-xs text-gray-400 mb-2.5">
               OneNote 存储路径
               <div className="flex gap-2 items-end">
                 <input
@@ -226,11 +246,11 @@ export default function SourcePanel({
                     if (e.key === 'Enter') handleScan();
                   }}
                   placeholder="例：G:/Software/OneNoteFiles/16.0/备份/我的笔记本"
-                  className="flex-1 mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+                  className="flex-1 mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400"
                 />
                 <button
                   onClick={() => setBrowseOpen((v) => !v)}
-                  className="px-2.5 py-1.5 text-xs rounded-lg border bg-white border-gray-300 whitespace-nowrap"
+                  className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-700 border-gray-600 text-gray-200 whitespace-nowrap hover:bg-gray-600"
                 >
                   浏览
                 </button>
@@ -253,7 +273,7 @@ export default function SourcePanel({
               >
                 {scanning ? '扫描中…' : '扫描笔记本'}
               </button>
-              <label className="flex items-center gap-1.5 text-xs text-gray-500 whitespace-nowrap pb-1.5">
+              <label className="flex items-center gap-1.5 text-xs text-gray-400 whitespace-nowrap pb-1.5">
                 <input
                   type="checkbox"
                   checked={includeRecycle}
@@ -276,24 +296,24 @@ export default function SourcePanel({
       </div>
 
       {/* 来源 B：Markdown 文件（折叠） */}
-      <div className="border border-gray-200 rounded-lg mb-2 bg-gray-50">
+      <div className="border border-gray-700 rounded-lg mb-2 bg-gray-900/40">
         <button
           onClick={() => toggleBlock('file')}
-          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-blue-50"
+          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-gray-700"
         >
           Markdown 文件
           <span className="text-gray-400 text-xs">{openBlocks.file ? '▾' : '▸'}</span>
         </button>
         {openBlocks.file && (
           <div className="px-3 pb-3">
-            <label className="block text-xs text-gray-500 mb-2.5">
+            <label className="block text-xs text-gray-400 mb-2.5">
               选择本地 .md / .txt 文件
               <input
                 ref={fileInputRef}
                 type="file"
                 accept=".md,.markdown,.mdown,.txt"
                 onChange={(e) => handleFile(e.target.files?.[0])}
-                className="w-full mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px]"
+                className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100"
               />
             </label>
             <p className="text-xs text-gray-400">文件只在浏览器里读取，不会上传到任何地方。</p>
@@ -302,24 +322,24 @@ export default function SourcePanel({
       </div>
 
       {/* 来源 C：手动输入（折叠，占视觉空间大所以后置） */}
-      <div className="border border-gray-200 rounded-lg mb-2.5 bg-gray-50">
+      <div className="border border-gray-700 rounded-lg mb-2.5 bg-gray-900/40">
         <button
           onClick={() => toggleBlock('paste')}
-          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-blue-50"
+          className="w-full flex justify-between items-center px-3 py-2 text-[13px] rounded-lg hover:bg-gray-700"
         >
           手动输入
           <span className="text-gray-400 text-xs">{openBlocks.paste ? '▾' : '▸'}</span>
         </button>
         {openBlocks.paste && (
           <div className="px-3 pb-3">
-            <label className="block text-xs text-gray-500">
+            <label className="block text-xs text-gray-400">
               笔记内容（Markdown / TXT）
               <textarea
                 rows={12}
                 value={note.text}
                 placeholder="粘贴你的笔记…"
                 onChange={(e) => setSource(e.target.value, note.filename, note.sourceLabel)}
-                className="w-full mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-y"
+                className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400 resize-y"
               />
             </label>
           </div>
@@ -327,10 +347,10 @@ export default function SourcePanel({
       </div>
 
       {/* 当前载入的笔记 */}
-      <div className="text-xs text-gray-500 border border-dashed border-gray-300 rounded-lg px-2 py-1.5 my-2.5 break-all">
+      <div className="text-xs text-gray-400 border border-dashed border-gray-600 rounded-lg px-2 py-1.5 my-2.5 break-all">
         {note.text.trim() ? (
           <>
-            <span className="text-gray-800">{note.sourceLabel || note.filename}</span>
+            <span className="text-gray-100">{note.sourceLabel || note.filename}</span>
             {` · ${note.text.length} 字符`}
           </>
         ) : (
@@ -338,12 +358,12 @@ export default function SourcePanel({
         )}
       </div>
 
-      <label className="block text-xs text-gray-500 mb-2.5">
+      <label className="block text-xs text-gray-400 mb-2.5">
         提取方式
         <select
           value={mode}
           onChange={(e) => setMode(e.target.value as ExtractMode)}
-          className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+          className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400"
         >
           <option value="rule">规则提取 · 无需配置</option>
           <option value="llm">LLM 提取 · 选择模型</option>
@@ -352,7 +372,7 @@ export default function SourcePanel({
 
       {mode === 'llm' && (
         <div className="mb-2.5">
-          <label className="block text-xs text-gray-500 mb-2.5">
+          <label className="block text-xs text-gray-400 mb-2.5">
             使用模型（来自视频下载的共享配置）
             <select
               value={model}
@@ -361,7 +381,7 @@ export default function SourcePanel({
                 localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
               }}
               disabled={modelsLoading || models.length === 0}
-              className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+              className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400"
             >
               {models.length === 0 ? (
                 <option value="">（未配置模型）</option>
@@ -382,7 +402,7 @@ export default function SourcePanel({
             </p>
           ) : (
             <p className="text-xs text-gray-400">
-              模型直接复用视频下载面板已保存的配置（config/llm_models.json），无需在此填写任何密钥。
+              模型配置（config/llm_models.json）。
             </p>
           )}
         </div>
@@ -396,13 +416,13 @@ export default function SourcePanel({
         {extracting ? '提取中…' : '提取卡片'}
       </button>
 
-      <h2 className="text-xs font-medium text-gray-500 mt-5 mb-2">3 · 导出</h2>
-      <label className="block text-xs text-gray-500 mb-2.5">
+      <h2 className="text-xs font-medium text-gray-400 mt-5 mb-2">3 · 导出</h2>
+      <label className="block text-xs text-gray-400 mb-2.5">
         牌组名称
         <input
           value={deckName}
           onChange={(e) => setDeckName(e.target.value)}
-          className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+          className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400"
         />
       </label>
       <button

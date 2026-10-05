@@ -47,14 +47,14 @@ export default function PreviewModal({ data, title, raw, onToggleRaw, onClose, o
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-white border border-gray-200 rounded-xl w-[min(760px,100%)] max-h-[84vh] flex flex-col">
-        <div className="flex justify-between items-center gap-2.5 px-3.5 py-2.5 border-b border-gray-200">
+      <div className="bg-gray-800 border border-gray-700 rounded-xl w-[min(760px,100%)] max-h-[84vh] flex flex-col">
+        <div className="flex justify-between items-center gap-2.5 px-3.5 py-2.5 border-b border-gray-700">
           <div className="text-[13.5px] font-medium break-all">{title || '—'}</div>
           <div className="flex gap-1.5">
             <button
               onClick={() => onToggleRaw(false)}
               className={`px-2.5 py-1.5 text-xs rounded-lg border ${
-                !raw ? 'bg-blue-500 border-blue-500 text-white' : 'bg-gray-100 border-gray-300'
+                !raw ? 'bg-blue-500 border-blue-500 text-white' : 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'
               }`}
             >
               渲染
@@ -62,14 +62,14 @@ export default function PreviewModal({ data, title, raw, onToggleRaw, onClose, o
             <button
               onClick={() => onToggleRaw(true)}
               className={`px-2.5 py-1.5 text-xs rounded-lg border ${
-                raw ? 'bg-blue-500 border-blue-500 text-white' : 'bg-gray-100 border-gray-300'
+                raw ? 'bg-blue-500 border-blue-500 text-white' : 'bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600'
               }`}
             >
               源码
             </button>
             <button
               onClick={onClose}
-              className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-100 border-gray-300"
+              className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600"
             >
               关闭
             </button>
@@ -78,7 +78,7 @@ export default function PreviewModal({ data, title, raw, onToggleRaw, onClose, o
 
         <div className="p-3.5 overflow-y-auto text-[13.5px] leading-[1.7]">
           {!data ? (
-            <p className="text-gray-400 text-xs p-2">解析中…</p>
+            <p className="text-gray-500 text-xs p-2">解析中…</p>
           ) : raw ? (
             <pre className="whitespace-pre-wrap break-words font-mono text-xs">{data.markdown}</pre>
           ) : (
@@ -89,8 +89,8 @@ export default function PreviewModal({ data, title, raw, onToggleRaw, onClose, o
           )}
         </div>
 
-        <div className="flex justify-between items-center gap-2.5 px-3.5 py-2.5 border-t border-gray-200 text-xs">
-          <span className="text-gray-500">{meta}</span>
+        <div className="flex justify-between items-center gap-2.5 px-3.5 py-2.5 border-t border-gray-700 text-xs">
+          <span className="text-gray-400">{meta}</span>
           <button
             onClick={onUse}
             disabled={!data}

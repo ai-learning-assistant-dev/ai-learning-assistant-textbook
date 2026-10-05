@@ -12,38 +12,38 @@ interface Props {
 export default function CardDetail({ card, onPatch, onSave, onDelete }: Props) {
   if (!card) {
     return (
-      <section className="bg-white rounded-xl shadow-lg p-4">
-        <h2 className="text-xs font-medium text-gray-500 mb-2">卡片详情</h2>
+      <section className="bg-gray-800 rounded-xl shadow-lg p-4">
+        <h2 className="text-xs font-medium text-gray-400 mb-2">卡片详情</h2>
         <p className="text-gray-400 text-[13px] py-5">从中间列表选一张卡片开始编辑</p>
       </section>
     );
   }
 
   return (
-    <section className="bg-white rounded-xl shadow-lg p-4">
-      <h2 className="text-xs font-medium text-gray-500 mb-2">卡片详情</h2>
+    <section className="bg-gray-800 rounded-xl shadow-lg p-4">
+      <h2 className="text-xs font-medium text-gray-400 mb-2">卡片详情</h2>
 
-      <label className="block text-xs text-gray-500 mb-2.5">
+      <label className="block text-xs text-gray-400 mb-2.5">
         正面（问题）
         <textarea
           rows={4}
           value={card.front}
           onChange={(e) => onPatch({ front: e.target.value })}
-          className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-y"
+          className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400 resize-y"
         />
       </label>
 
-      <label className="block text-xs text-gray-500 mb-2.5">
+      <label className="block text-xs text-gray-400 mb-2.5">
         反面（答案）
         <textarea
           rows={9}
           value={card.back}
           onChange={(e) => onPatch({ back: e.target.value })}
-          className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-y"
+          className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400 resize-y"
         />
       </label>
 
-      <label className="block text-xs text-gray-500 mb-2.5">
+      <label className="block text-xs text-gray-400 mb-2.5">
         标签（逗号分隔）
         <input
           value={card.tags.join(', ')}
@@ -56,7 +56,7 @@ export default function CardDetail({ card, onPatch, onSave, onDelete }: Props) {
                 .filter(Boolean),
             })
           }
-          className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+          className="w-full mt-1 px-2.5 py-1.5 bg-gray-900 border border-gray-600 rounded-lg text-[13px] text-gray-100 focus:outline-none focus:border-blue-400"
         />
       </label>
 
@@ -69,8 +69,8 @@ export default function CardDetail({ card, onPatch, onSave, onDelete }: Props) {
               key={`${issue.code}-${idx}`}
               className={`text-xs p-1.5 rounded mb-1.5 border-l-[3px] ${
                 issue.level === 'error'
-                  ? 'border-l-red-500 bg-red-50 text-red-700'
-                  : 'border-l-amber-500 bg-amber-50 text-amber-700'
+                  ? 'border-l-red-500 bg-red-500/10 text-red-300'
+                  : 'border-l-amber-500 bg-amber-500/10 text-amber-300'
               }`}
             >
               [{issue.level === 'error' ? '错误' : '警告'}·{issue.code}] {issue.message}
@@ -88,7 +88,7 @@ export default function CardDetail({ card, onPatch, onSave, onDelete }: Props) {
         </button>
         <button
           onClick={onDelete}
-          className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded-lg text-sm hover:text-red-600 hover:border-red-500"
+          className="px-3 py-1.5 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-200 hover:bg-gray-600 hover:text-red-400 hover:border-red-500"
         >
           删除
         </button>

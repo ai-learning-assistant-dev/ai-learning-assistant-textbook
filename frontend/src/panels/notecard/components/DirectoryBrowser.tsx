@@ -38,32 +38,32 @@ export default function DirectoryBrowser({ initialPath, onToast, onPick }: Props
   }, [initialPath, loadDir]);
 
   return (
-    <div className="border border-dashed border-gray-300 rounded-lg p-2.5 mb-2.5">
+    <div className="border border-dashed border-gray-600 rounded-lg p-2.5 mb-2.5">
       <div className="flex items-center gap-2 mb-1.5">
         <button
           disabled={!dir?.parent}
           onClick={() => dir?.parent && loadDir(dir.parent)}
-          className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-100 border-gray-300 disabled:opacity-50 whitespace-nowrap"
+          className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
         >
           ↑ 上级
         </button>
         <button
           disabled={!dir?.path}
           onClick={() => dir?.path && onPick(dir.path)}
-          className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-100 border-gray-300 disabled:opacity-50 whitespace-nowrap"
+          className="px-2.5 py-1.5 text-xs rounded-lg border bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 disabled:opacity-50 whitespace-nowrap"
         >
           选定
         </button>
-        <span className="text-[11px] text-gray-500 break-all">
+        <span className="text-[11px] text-gray-400 break-all">
           {dir?.path || '（先选一个盘符）'}
         </span>
       </div>
 
       <div className="max-h-[190px] overflow-y-auto">
         {loading ? (
-          <p className="text-xs text-gray-400 p-2">加载中…</p>
+          <p className="text-xs text-gray-500 p-2">加载中…</p>
         ) : !dir || dir.dirs.length === 0 ? (
-          <p className="text-xs text-gray-400 p-2">没有子目录</p>
+          <p className="text-xs text-gray-500 p-2">没有子目录</p>
         ) : (
           dir.dirs.map((item) => (
             <div
@@ -73,10 +73,10 @@ export default function DirectoryBrowser({ initialPath, onToast, onPick }: Props
                 onPick(item.path);
                 loadDir(item.path);
               }}
-              className="flex justify-between items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[12.5px] hover:bg-blue-50"
+              className="flex justify-between items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-[12.5px] hover:bg-gray-700"
             >
               <span>{item.name}</span>
-              <span className="text-[11px] text-gray-500 whitespace-nowrap">
+              <span className="text-[11px] text-gray-400 whitespace-nowrap">
                 {item.sections ? `${item.sections} 个分区` : ''}
               </span>
             </div>

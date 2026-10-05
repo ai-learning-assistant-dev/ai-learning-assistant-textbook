@@ -114,23 +114,23 @@ export default function SectionTree({
     const state = pages[id];
 
     return (
-      <div key={id} className="border-l border-gray-200 ml-1.5 pl-2">
+      <div key={id} className="border-l border-gray-700 ml-1.5 pl-2">
         <div
           onClick={() => toggle(node, id)}
-          className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md cursor-pointer text-[12.5px] hover:bg-blue-50 ${
+          className={`flex items-center gap-1.5 px-1.5 py-1 rounded-md cursor-pointer text-[12.5px] hover:bg-gray-700 ${
             node.type === 'notebook' ? 'font-medium' : ''
-          } ${node.type === 'section' && !node.valid ? 'text-red-600' : ''}`}
+          } ${node.type === 'section' && !node.valid ? 'text-red-400' : ''}`}
         >
-          <span className="text-gray-400 text-[10px] w-2.5">{isOpen ? '▾' : '▸'}</span>
+          <span className="text-gray-500 text-[10px] w-2.5">{isOpen ? '▾' : '▸'}</span>
           <span className="flex-1 overflow-hidden text-ellipsis whitespace-nowrap">{node.name}</span>
-          <span className="text-gray-400 text-[11px] whitespace-nowrap">{meta}</span>
+          <span className="text-gray-500 text-[11px] whitespace-nowrap">{meta}</span>
         </div>
 
         {isOpen && node.type === 'section' && (
           <>
             {/* 顺序要紧：loading 态既没有 list 也没有 error */}
             {!state || ('loading' in state && state.loading) ? (
-              <p className="text-xs text-gray-400 px-2 py-1">解析中…</p>
+              <p className="text-xs text-gray-500 px-2 py-1">解析中…</p>
             ) : 'error' in state ? (
               <p className="text-[11.5px] text-red-600 px-2 py-1">{state.error}</p>
             ) : !('list' in state) ? (
@@ -143,7 +143,7 @@ export default function SectionTree({
                   </p>
                 )}
                 {state.list.length === 0 ? (
-                  <p className="text-xs text-gray-400 px-2 py-1">该分区没有解析出页面</p>
+                  <p className="text-xs text-gray-500 px-2 py-1">该分区没有解析出页面</p>
                 ) : (
                   <>
                     {renderNode(
