@@ -1,9 +1,11 @@
 """LLM 提取层：OpenAI 兼容调用 + 离线回落。
 
-两种提取路径：
-    - extract_cards_llm   真实调用，填 LLMConfig 的 base_url / api_key / model 即用，
-                          覆盖 OpenAI、DeepSeek、硅基流动、Ollama、OpenRouter 等兼容端点。
-    - extract_cards_mock  不联网的离线路径，回落到规则提取；可选的 presets 由调用方注入。
+三条提取路径：
+    - extract_cards_llm        urllib 真实调用，填 LLMConfig 即用（dev / compare / 测试复用）。
+    - extract_cards_llm_client 生产真实调用，走调用方注入的客户端（如视频下载共用的
+                               OpenAICompatClient），模型配置由调用方从共享模型库注入，
+                               本模块不读任何 Key。
+    - extract_cards_mock       不联网的离线路径，回落到规则提取；可选的 presets 由调用方注入。
 
 本模块不内置任何样例卡片内容，测试数据一律放在 tests/ 下。
 """
@@ -175,11 +177,44 @@ def extract_cards_llm(
     hint: str = "",
     extra_tags: list[str] | None = None,
 ) -> list[Card]:
-    """调用 OpenAI 兼容端点提取卡片。"""
+    """调用 OpenAI 兼容端点提取卡片（urllib 路径，供 dev/compare 与测试复用）。"""
     body, _ = strip_frontmatter(text)
     user = USER_TEMPLATE.format(text=body, extra=hint or "（无额外要求）")
     raw = _chat(cfg, SYSTEM_PROMPT, user)
     cards = _to_cards(_parse_json_response(raw))
+    if extra_tags:
+        for c in cards:
+            c.tags = list(dict.fromkeys(list(c.tags) + list(extra_tags)))
+    return cards
+
+
+def extract_cards_llm_client(
+    text: str,
+    client,
+    *,
+    hint: str = "",
+    extra_tags: list[str] | None = None,
+) -> list[Card]:
+    """生产路径：调用注入的 OpenAI 兼容客户端（如视频下载面板共用的 OpenAICompatClient）。
+
+    与 ``extract_cards_llm`` 的区别：底层走调用方注入的客户端，模型配置由调用方从
+    共享模型库读取，本函数不读任何 Key。网络 / 解析异常统一收成 ``LLMError``，
+    供 routes 映射成 502 / 400。
+    """
+    body, _ = strip_frontmatter(text)
+    user = USER_TEMPLATE.format(text=body, extra=hint or "（无额外要求）")
+    try:
+        resp = client.chat_completions([
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user},
+        ])
+    except Exception as exc:  # noqa: BLE001 - 统一成 LLMError，避免把栈抛给前端
+        raise LLMError(f"调用模型失败：{exc}") from exc
+    try:
+        content = resp["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise LLMError(f"模型返回结构异常：{str(resp)[:300]}") from exc
+    cards = _to_cards(_parse_json_response(content))
     if extra_tags:
         for c in cards:
             c.tags = list(dict.fromkeys(list(c.tags) + list(extra_tags)))

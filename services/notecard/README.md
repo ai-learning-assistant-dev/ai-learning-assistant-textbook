@@ -101,4 +101,10 @@ python tests/run.py -v     # 带用例名
 - **图片不导出**。OneNote 页面里的图片在 Markdown 中只留 `![图片](images/...)` 占位，
   apkg 目前不支持 media。
 - `SYSTEM_PROMPT`（`note2anki/extract_llm.py` 顶部）还是初版，改完需要重启服务生效。
-- LLM 的 Key 不落盘，只走请求体或环境变量 `SILICONFLOW_API_KEY` / `OPENAI_API_KEY`。
+- 笔记制卡面板**不维护模型配置**，但 LLM 提取模式下提供一个「使用模型」下拉框：
+  面板加载时从笔记制卡自己的 `GET /api/notecard/models`（读 `config/llm_models.json`，即视频下载
+  共享配置）拉取已保存的模型列表，用户直接选一个即可，无需在此填写任何 Key。选中的模型名通过
+  请求体 `model` 传给后端（按 `name` 匹配），缺省回落 `app_config.last_selected_model`。底层走与
+  视频下载同一套、已验证可用的 `OpenAICompatClient`。未配置任何模型 / 未选择时返回
+  `llm_not_configured`（400）。仅 dev / compare 工具（`/api/notecard/compare`）仍保留请求体带 Key 的
+  `extract_cards_llm` 路径。

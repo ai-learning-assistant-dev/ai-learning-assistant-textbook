@@ -46,19 +46,22 @@ export interface NoteSource {
 
 export type ExtractMode = 'rule' | 'llm';
 
-/** LLM 手填配置：Key 只走请求体，不落盘 */
-export interface LLMForm {
-  base_url: string;
-  api_key: string;
-  model: string;
-}
-
 export interface ExtractPayload {
   text: string;
   filename: string;
   mode: ExtractMode;
   include_section_cards: boolean;
-  llm?: LLMForm;
+  /** LLM 模式下选中的共享模型（按 name 匹配 config/llm_models.json） */
+  model?: string;
+}
+
+/** 视频下载面板共享的模型配置条目（config/llm_models.json 里的每一项） */
+export interface ModelEntry {
+  id: string;
+  name: string;
+  model_name: string;
+  api_base: string;
+  api_key?: string;
 }
 
 export interface ExtractResult {

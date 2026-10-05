@@ -7,13 +7,18 @@
 没装时接口给出可操作提示，而不是让整个 Flask 服务起不来。
 """
 
+import json
 import traceback
+from pathlib import Path
 
 from flask import Blueprint, jsonify, request, send_from_directory
 
 from .note2anki.extract_llm import LLMError, LLMNotConfigured
 
 bp = Blueprint('notecard', __name__, url_prefix='/api/notecard')
+
+# 项目根（services/notecard → services → 根）
+_ROOT = Path(__file__).resolve().parents[2]
 
 # 路径 → note2anki.server 里的 do_* 函数名
 _POST_ROUTES = {
@@ -79,6 +84,20 @@ def _register():
 
 
 _register()
+
+
+@bp.route('/models', methods=['GET'])
+def list_models():
+    """返回「视频下载」面板共享的模型列表（config/llm_models.json），供笔记制卡下拉选择。
+
+    放在笔记制卡自己的前缀下，和 /api/notecard/extract 走同一条路由，
+    避免依赖视频下载的 /api/models 是否可达。
+    """
+    try:
+        cfg = json.loads((_ROOT / 'config' / 'llm_models.json').read_text(encoding='utf-8'))
+        return jsonify({'success': True, 'models': cfg.get('models', [])})
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({'success': False, 'error': str(exc)}), 500
 
 
 @bp.route('/health', methods=['GET'])

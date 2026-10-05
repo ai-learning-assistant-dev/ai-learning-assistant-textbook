@@ -8,6 +8,7 @@ import type {
   ExportResult,
   ExtractPayload,
   ExtractResult,
+  ModelEntry,
   PagesResult,
   RenderResult,
   ScanResult,
@@ -48,3 +49,15 @@ export const renderPage = (section: string, index: number) =>
   api<RenderResult>('/onenote/page', { section, index });
 
 export const renderSection = (section: string) => api<RenderResult>('/onenote/section', { section });
+
+/**
+ * 加载「视频下载」面板共享的模型列表（config/llm_models.json）。
+ * 笔记制卡不在本面板维护模型，直接复用这份已保存的配置。
+ * 走笔记制卡自己的前缀 /api/notecard/models，避免依赖 /api/models 是否可达。
+ */
+export const listModels = async (): Promise<ModelEntry[]> => {
+  const res = await fetch(`${BASE}/models`);
+  const data = await res.json().catch(() => ({ success: false, models: [] }));
+  if (!res.ok || !data.success) throw new Error(data.error || '获取模型列表失败');
+  return (data.models || []) as ModelEntry[];
+};

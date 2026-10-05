@@ -76,7 +76,8 @@ frontend/*.local
 .uv-cache/
 .uv-python/
 
-templates
+# 前端编译产物
+templates/assets
 
 # 制卡导出的 .apkg 产物（services/notecard/note2anki/server.py 的 OUT_DIR）
 out/

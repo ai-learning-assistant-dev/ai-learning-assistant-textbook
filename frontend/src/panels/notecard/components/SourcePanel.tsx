@@ -4,49 +4,13 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { exportApkg, extractCards, scanNotebooks } from '../api';
-import type { Card, ExtractMode, LLMForm, NoteSource, Report, ScanResult } from '../types';
+import { exportApkg, extractCards, listModels, scanNotebooks } from '../api';
+import type { Card, ExtractMode, ModelEntry, NoteSource, Report, ScanResult } from '../types';
 import DirectoryBrowser from './DirectoryBrowser';
 import SectionTree from './SectionTree';
 
 const PATH_STORAGE_KEY = 'note2anki.onenote_path';
-
-const DEFAULT_LLM: LLMForm = {
-  base_url: 'https://api.siliconflow.cn/v1',
-  api_key: '',
-  model: 'deepseek-ai/DeepSeek-V3.2',
-};
-
-/** 模型候选，与原实现的 datalist 一致（已过滤图像/视频/音频/Embedding 类） */
-const MODEL_OPTIONS = [
-  'deepseek-ai/DeepSeek-V3.2',
-  'deepseek-ai/DeepSeek-V3.1-Terminus',
-  'deepseek-ai/DeepSeek-V3',
-  'deepseek-ai/DeepSeek-R1',
-  'Qwen/Qwen3.5-35B-A3B',
-  'Qwen/Qwen3.5-27B',
-  'Qwen/Qwen3.5-9B',
-  'Qwen/Qwen3-32B',
-  'Qwen/Qwen3-14B',
-  'Qwen/Qwen3-30B-A3B-Instruct-2507',
-  'Qwen/Qwen3-Coder-30B-A3B-Instruct',
-  'Qwen/Qwen3-VL-32B-Instruct',
-  'Qwen/Qwen3-VL-32B-Thinking',
-  'Qwen/Qwen3-VL-30B-A3B-Instruct',
-  'Qwen/Qwen3-VL-30B-A3B-Thinking',
-  'Qwen/Qwen3-VL-8B-Instruct',
-  'Qwen/Qwen3-VL-8B-Thinking',
-  'Qwen/Qwen2.5-72B-Instruct',
-  'Qwen/Qwen2.5-32B-Instruct',
-  'Qwen/Qwen2.5-7B-Instruct',
-  'zai-org/GLM-4.5-Air',
-  'zai-org/GLM-4.5V',
-  'THUDM/GLM-4-32B-0414',
-  'inclusionAI/Ling-flash-2.0',
-  'inclusionAI/Ling-mini-2.0',
-  'ByteDance-Seed/Seed-OSS-36B-Instruct',
-  'tencent/Hunyuan-A13B-Instruct',
-];
+const MODEL_STORAGE_KEY = 'note2anki.llm_model';
 
 interface Props {
   note: NoteSource;
@@ -81,8 +45,13 @@ export default function SourcePanel({
   );
 
   const [mode, setMode] = useState<ExtractMode>('rule');
-  const [llm, setLlm] = useState<LLMForm>(DEFAULT_LLM);
   const [extracting, setExtracting] = useState<boolean>(false);
+
+  // LLM 模式下从「视频下载」共享配置里选模型：加载列表 + 记住上次选的
+  const [models, setModels] = useState<ModelEntry[]>([]);
+  const [model, setModel] = useState<string>('');
+  const [modelsLoading, setModelsLoading] = useState<boolean>(false);
+  const [modelError, setModelError] = useState<string>('');
 
   const [deckName, setDeckName] = useState<string>('Note2Anki');
   const [exportHint, setExportHint] = useState<string>('');
@@ -93,6 +62,31 @@ export default function SourcePanel({
   useEffect(() => {
     const saved = localStorage.getItem(PATH_STORAGE_KEY);
     if (saved) setOnPath(saved);
+  }, []);
+
+  // 载入「视频下载」面板共享的模型列表，供 LLM 模式下拉选择
+  useEffect(() => {
+    let alive = true;
+    setModelsLoading(true);
+    setModelError('');
+    listModels()
+      .then((list) => {
+        if (!alive) return;
+        setModels(list);
+        const saved = localStorage.getItem(MODEL_STORAGE_KEY);
+        const initial = saved && list.some((m) => m.name === saved) ? saved : (list[0]?.name || '');
+        setModel(initial);
+      })
+      .catch((e) => {
+        // 加载失败要显式提示，而不是静默让下拉停在「（未配置模型）」
+        if (alive) setModelError(e instanceof Error ? e.message : '加载模型列表失败');
+      })
+      .finally(() => {
+        if (alive) setModelsLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   /** 载入笔记正文：来源可能是 OneNote 页 / 文件 / 粘贴 */
@@ -151,15 +145,9 @@ export default function SourcePanel({
         // 章节汇总卡的开关已从界面移除：实测与列表项 / 定义卡高度重复。
         // 后端逻辑仍在（include_section_cards），tests/test_section_cards.py 有用例。
         include_section_cards: false,
-        ...(mode === 'llm'
-          ? {
-              llm: {
-                base_url: llm.base_url.trim(),
-                api_key: llm.api_key.trim(),
-                model: llm.model.trim() || 'gpt-4o-mini',
-              },
-            }
-          : {}),
+        // LLM 模式：把下拉里选中的共享模型名发给后端（按 name 匹配）；
+        // 不在这里发任何 Key，模型配置直接复用 config/llm_models.json。
+        ...(mode === 'llm' ? { model } : {}),
       };
       const d = await extractCards(payload);
       onExtracted(d.cards, d.report);
@@ -171,7 +159,7 @@ export default function SourcePanel({
     } finally {
       setExtracting(false);
     }
-  }, [note, mode, llm, onExtracted, onToast]);
+  }, [note, mode, model, onExtracted, onToast]);
 
   const handleExport = useCallback(async () => {
     if (!cards.length) {
@@ -358,53 +346,51 @@ export default function SourcePanel({
           className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
         >
           <option value="rule">规则提取 · 无需配置</option>
-          <option value="llm">LLM 提取 · 需配置</option>
+          <option value="llm">LLM 提取 · 选择模型</option>
         </select>
       </label>
 
       {mode === 'llm' && (
-        <div className="border border-dashed border-gray-300 rounded-lg p-2.5 mb-2.5">
+        <div className="mb-2.5">
           <label className="block text-xs text-gray-500 mb-2.5">
-            Base URL
-            <input
-              value={llm.base_url}
-              onChange={(e) => setLlm({ ...llm, base_url: e.target.value })}
-              className="w-full mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
-            />
+            使用模型（来自视频下载的共享配置）
+            <select
+              value={model}
+              onChange={(e) => {
+                setModel(e.target.value);
+                localStorage.setItem(MODEL_STORAGE_KEY, e.target.value);
+              }}
+              disabled={modelsLoading || models.length === 0}
+              className="w-full mt-1 px-2.5 py-1.5 bg-gray-50 border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
+            >
+              {models.length === 0 ? (
+                <option value="">（未配置模型）</option>
+              ) : (
+                models.map((m) => (
+                  <option key={m.id} value={m.name}>
+                    {m.name} · {m.model_name}
+                  </option>
+                ))
+              )}
+            </select>
           </label>
-          <label className="block text-xs text-gray-500 mb-2.5">
-            API Key
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={llm.api_key}
-              onChange={(e) => setLlm({ ...llm, api_key: e.target.value })}
-              className="w-full mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
-            />
-          </label>
-          <label className="block text-xs text-gray-500 mb-1">
-            Model
-            <input
-              list="notecard-model-list"
-              value={llm.model}
-              onChange={(e) => setLlm({ ...llm, model: e.target.value })}
-              className="w-full mt-1 px-2.5 py-1.5 bg-white border border-gray-300 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
-            />
-            <datalist id="notecard-model-list">
-              {MODEL_OPTIONS.map((m) => (
-                <option key={m} value={m} />
-              ))}
-            </datalist>
-          </label>
-          <p className="text-xs text-gray-400">
-            只能用服务商给定列表内的模型；图像 / 视频 / 音频 / Embedding 类已过滤。
-          </p>
+          {models.length === 0 ? (
+            <p className="text-xs text-gray-400">
+              {modelError
+                ? `加载模型列表失败：${modelError}`
+                : '尚未在「视频下载」面板添加任何模型。去视频下载添加一个模型后，这里即可选择，无需在此输入 Key。'}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-400">
+              模型直接复用视频下载面板已保存的配置（config/llm_models.json），无需在此填写任何密钥。
+            </p>
+          )}
         </div>
       )}
 
       <button
         onClick={handleExtract}
-        disabled={extracting}
+        disabled={extracting || (mode === 'llm' && !model)}
         className="w-full px-3 py-1.5 bg-blue-500 border border-blue-500 text-white rounded-lg text-sm hover:brightness-110 disabled:opacity-50"
       >
         {extracting ? '提取中…' : '提取卡片'}

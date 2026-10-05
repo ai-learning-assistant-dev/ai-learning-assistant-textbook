@@ -9,6 +9,7 @@ Note2Anki 的业务函数层（与 HTTP 无关）。
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import time
@@ -19,7 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .apkg import build_apkg
-from .extract_llm import LLMConfig, LLMError, LLMNotConfigured, extract_cards_llm, extract_cards_mock
+from .extract_llm import LLMConfig, LLMError, LLMNotConfigured, extract_cards_llm, extract_cards_llm_client, extract_cards_mock
 from .extract_rule import extract_cards as rule_extract
 from .onenote_api import OneNoteError, browse, list_pages, render_page, render_section, scan
 from .schema import Card, validate
@@ -51,7 +52,11 @@ def _read_cards(payload: dict) -> list[Card]:
 
 
 def _llm_config(payload: dict) -> LLMConfig:
-    """构造 LLM 配置。Key 优先取请求体，其次回落环境变量（不落盘）。"""
+    """构造 LLM 配置。Key 优先取请求体，其次回落环境变量（不落盘）。
+
+    注意：这条「请求体带 Key」的路径仅供 dev / compare 工具复用（test_compare
+    仍依赖它），笔记制卡面板自身已不再发送任何 LLM 配置字段。
+    """
     cfg = payload.get("llm") or {}
     return LLMConfig(
         base_url=str(cfg.get("base_url") or "https://api.siliconflow.cn/v1"),
@@ -60,6 +65,48 @@ def _llm_config(payload: dict) -> LLMConfig:
         model=str(cfg.get("model") or "deepseek-ai/DeepSeek-V3.2"),
         temperature=float(cfg.get("temperature") or 0.2),
     )
+
+
+def _shared_llm_client(model_name: str | None = None):
+    """构造笔记制卡 LLM 提取用的客户端：复用「视频下载」面板共享的模型配置。
+
+    模型配置来自 config/llm_models.json（用户在视频下载面板维护），具体用哪个由
+    model_name 指定；缺省取 app_config.last_selected_model（用户在视频下载最后选择的
+    模型）。底层用 OpenAICompatClient —— 与视频下载总结功能同一套、已验证可用的客户端。
+
+    任何读不到 / 没选 / 不完整的情况都抛 LLMNotConfigured，由 routes 映射成 400，
+    让前端拿到明确中文报错而不是 500 空壳。
+    """
+    cfg_path = ROOT / "config" / "llm_models.json"
+    app_path = ROOT / "config" / "app_config.json"
+    try:
+        app_cfg = json.loads(app_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise LLMNotConfigured(
+            "未找到 config/app_config.json，请先打开一次「视频下载」面板以生成配置")
+
+    name = (model_name or app_cfg.get("last_selected_model") or "").strip()
+    if not name:
+        raise LLMNotConfigured(
+            "尚未选择模型：请在笔记制卡的「使用模型」下拉中选择一个已保存的模型"
+            "（在视频下载面板添加），LLM 提取才能使用")
+
+    from subtitle_summarizer import load_llm_config
+    try:
+        m = load_llm_config(str(cfg_path), model_name=name)
+    except (ValueError, FileNotFoundError) as exc:
+        raise LLMNotConfigured(f"读取共享模型配置失败：{exc}")
+
+    from llm_client import OpenAICompatClient
+    try:
+        return OpenAICompatClient(
+            api_base=str(m.get("api_base") or ""),
+            api_key=str(m.get("api_key") or ""),
+            default_model=str(m.get("model_name") or ""),
+            request_timeout=180,
+        )
+    except RuntimeError as exc:
+        raise LLMNotConfigured(f"共享模型配置不完整：{exc}")
 
 
 def do_extract(payload: dict) -> dict:
@@ -79,7 +126,15 @@ def do_extract(payload: dict) -> dict:
         cards = rule_extract(text, include_section_cards=include_section,
                              as_markdown=_as_markdown(filename))
     elif mode == "llm":
-        cards = extract_cards_llm(text, _llm_config(payload), hint=str(payload.get("hint") or ""))
+        # 不再从请求体读 Key：改为复用「视频下载」面板共享的模型配置
+        # （config/llm_models.json）。具体用哪个模型由请求体 model（name）指定，
+        # 缺省回落 app_config.last_selected_model。底层走已验证可用的 OpenAICompatClient。
+        req_model = payload.get("model")
+        if req_model in (None, "", "None"):
+            req_model = None
+        cards = extract_cards_llm_client(
+            text, _shared_llm_client(req_model),
+            hint=str(payload.get("hint") or ""))
     else:
         raise ValueError(f"未知的提取模式：{mode}")
 
